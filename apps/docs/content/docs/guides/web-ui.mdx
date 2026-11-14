@@ -3,29 +3,38 @@ title: Web UI
 description: What each page of the web UI at http://127.0.0.1:7690 does.
 ---
 
-`switchboard up` opens the web UI at `http://127.0.0.1:7690`. It edits the same `config.json` as the CLI, through the daemon's admin API, and updates live as servers start, clients connect and tools are called.
+`switchboard up` opens the web UI at `http://127.0.0.1:7690`. It edits the same `config.json` as the CLI, through the daemon's admin API, and updates live as servers start, clients connect and tools are called. The theme follows your system, or pick Light or Dark at the bottom of the sidebar.
 
 ## Overview
 
-The daemon's version, port and uptime, counts of servers, profiles and active sessions, and a table of the clients connected right now: their profile, how that profile was chosen (path, header, client rule or default) and the [surface](/docs/concepts/tool-surfaces) they get.
+The first page you see. Until setup is done, a **Get started** checklist walks through adding servers, creating a profile, connecting a client and choosing whether to keep an [activity log](/docs/reference/cli#activity). Below it:
+
+- **Connect anything**: the URL of every profile and of the shared `/mcp` endpoint, with ready-to-paste `mcp.json` entries.
+- **Set up with AI**: a prompt for your coding agent to set Switchboard up for you, for each client. See [Set up with AI](/docs/guides/setup-with-ai).
+- A banner for each client **waiting for a profile**, with a picker to give it one.
+- The daemon's version and port, counts of servers, profiles and sessions, and the clients connected right now, with their profile and how it was chosen.
 
 ## Servers
 
-Every configured server with its transport, state and tool count. Add a server with the form, or **Paste JSON** from any `mcp.json`, including a whole `mcpServers` block. A server's page has three tabs: **settings**, its cached **tools**, and **logs** with its recent stderr output. **Test** starts it and lists its tools; **Restart** stops and starts it again. The form warns about `secret://` references whose secret is not stored yet. See [Importing servers](/docs/guides/import-servers).
+Every configured server with its state: **Running**, **Idle · starts on demand**, **Starting**, **Error** (with the next automatic restart), or **Sign-in required**. Add a server with the form, or **Paste JSON** from any `mcp.json`, including a whole `mcpServers` block. A new server is started at once to discover its tools.
+
+A server's page has **Settings**, its cached **Tools**, and **Logs** with recent stderr output. **Test** starts it and lists its tools; **Restart** stops and starts it again. **Keep running** starts the server with Switchboard and keeps it up (`idleTimeoutSec: 0`). A server that uses OAuth shows a **Sign in** card instead; the page updates on its own once you have signed in. The form warns about `secret://` references whose secret is not stored yet. See [Importing servers](/docs/guides/import-servers).
 
 ## Import
 
-The MCP servers found in your clients' configuration files, grouped by client. Select the ones you want, and rename them if needed, then import them in one step. Importing a server with a name that already exists replaces it. See [Importing servers](/docs/guides/import-servers#import).
+The MCP servers found in your clients' configuration files, grouped by client. Select the ones you want, rename them if needed, and import them in one step. Importing a server with a name that already exists replaces it. See [Importing servers](/docs/guides/import-servers#import).
 
 ## Profiles
 
 Create and edit [profiles](/docs/concepts/profiles): name, description, servers, `include` and `exclude` patterns, and the surface with its threshold and code-mode budgets. Every tool of the profile's servers has a switch, which edits `include` and `exclude` for you, and **Customize** sets an [override](/docs/concepts/profiles#tool-names-clients-see) of its name or description.
 
-A live preview shows, before you save, exactly what a client of the profile will see: the surface `auto` would pick, the names clients get, and an estimate of how many tokens the tool list costs compared with `passthrough`.
+A live preview, which stays in view as you scroll, shows before you save exactly what a client of the profile will see: the surface `auto` would pick, the names clients get, and an estimate of how many tokens the tool list costs compared with `passthrough`.
 
 ## Clients
 
-Each supported client, whether it is installed, and the profile it is connected to. Pick a profile and **Connect**, **Switch** or **Disconnect**; see [Connecting clients](/docs/guides/connect-clients). The page also edits the [client rules](/docs/concepts/profile-resolution#client-rules), in order, and the [default profile](/docs/concepts/profile-resolution#default-profile), and shows copyable snippets for manual setup: the profile URL, the header form and the stdio bridge.
+- **Connected clients**: every MCP client that has connected, including ones Switchboard has no preset for, with whether it is live, how its profile was chosen and when it was last seen. Clients [waiting for a profile](/docs/concepts/profile-resolution#default-profile) come first; pick a profile and the client gets its tools at once, without reconnecting. **Any MCP client works** gives the shared URL to paste into a client that is not listed.
+- **Known clients**: each supported client, whether it is installed, and the profile it is connected to. **What will be written** previews the exact entry. Pick a profile, or **Automatic** to use client rules, then **Connect**; see [Connecting clients](/docs/guides/connect-clients).
+- **Client rules** and the **default profile**, which decide the profile on the shared `/mcp` URL. Both are saved in `config.json`.
 
 ## Secrets
 
@@ -33,4 +42,4 @@ The names of stored secrets and where they are kept (the OS keychain or the secr
 
 ## Activity
 
-The most recent tool calls, newest first: time, profile, client, tool, whether it was called directly, through `call_tool` or from code mode, duration, and any error. Filter by profile or show only errors. Arguments and results are never recorded.
+Turn the activity log on or off and choose how long to keep it. With the log on, charts show calls and errors over time, median and p95 latency, the busiest tools, and calls by client and profile, over the last hour, day, week or month. Below them, the latest tool calls arrive live: time, profile, client, tool, whether it was called directly, through `call_tool` or from code mode, duration and any error. Arguments and results are never recorded.

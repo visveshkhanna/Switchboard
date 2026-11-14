@@ -45,7 +45,7 @@ switchboard --help
 
 ## up
 
-Starts the daemon on `127.0.0.1`, port `7690` unless `--port` or `SWITCHBOARD_PORT` says otherwise, serves the [MCP endpoints](/docs/reference/http-api) and the web UI on that port, and opens the web UI in your browser unless `--no-open` is given. It runs in the foreground until stopped with Ctrl+C. `--detach` (`-d`) starts it in the background instead, logging to `~/.switchboard/logs/daemon.log`. `--host` binds another address, and `--log` sets the log level (`debug`, `info`, `warn`, `error`). If the daemon is already running, `up` says so and opens the web UI. The first time it runs in a terminal, `up` asks whether to keep an [activity log](#activity).
+Starts the daemon on `127.0.0.1`, port `7690` unless `--port` or `SWITCHBOARD_PORT` says otherwise, serves the [MCP endpoints](/docs/reference/http-api) and the web UI on that port, and opens the web UI in your browser unless `--no-open` is given. It runs in the foreground until stopped with Ctrl+C, which closes open connections and stops the MCP servers it started straight away; press Ctrl+C again to exit without waiting. `--detach` (`-d`) starts it in the background instead, logging to `~/.switchboard/logs/daemon.log`. `--host` binds another address, and `--log` sets the log level (`debug`, `info`, `warn`, `error`). If the daemon is already running, `up` says so and opens the web UI. The first time it runs in a terminal, `up` asks whether to keep an [activity log](#activity).
 
 ## stop
 
@@ -88,7 +88,7 @@ Reads the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, W
 
 ## client
 
-`client ls` lists the supported clients, whether each is installed, the profile it is connected to, and how many other servers its configuration has. `client connect` writes a `switchboard` entry into the client's MCP configuration, after backing the file up, and `client disconnect` removes it. With `--auto` instead of `--profile`, the entry points at the shared `/mcp` endpoint, where [client rules](/docs/concepts/profile-resolution#client-rules) and the default profile choose the profile. Client ids: `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex`, `gemini-cli`. See [Connecting clients](/docs/guides/connect-clients).
+`client ls` lists the supported clients, whether each is installed, the profile it is connected to, and how many other servers its configuration has, then every MCP client that has connected, with its profile or `waiting`. `client connect` writes a `switchboard` entry into the client's MCP configuration, after backing the file up, and `client disconnect` removes it. With `--auto` instead of `--profile`, the entry points at the shared `/mcp` endpoint, where [client rules](/docs/concepts/profile-resolution#client-rules) and the default profile choose the profile. Client ids: `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex`, `gemini-cli`. See [Connecting clients](/docs/guides/connect-clients).
 
 ## secret
 
