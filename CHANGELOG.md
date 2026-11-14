@@ -25,6 +25,8 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 - Adding a server, or adding one to a profile a client already uses, now starts it to discover its tools and tells connected clients, instead of waiting until the server was tested by hand.
 - A server that crashes is restarted automatically with backoff.
 - Hand edits of `config.json` are no longer missed when the file watcher drops an event.
+- A remote server waiting for OAuth sign-in is no longer restarted as if it had crashed.
+- Menu and select items show a hover state, and the selected Activity time range is highlighted.
 
 ## [0.1.0] - 2026-11-14
 
