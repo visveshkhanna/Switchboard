@@ -12,6 +12,10 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@switchboard/shared": "workspace:*"
+    "@hono/node-server": "^2.1.8",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@switchboard/shared": "workspace:*",
+    "hono": "^4.13.18",
+    "zod": "^4.6.7"
   }
 }
