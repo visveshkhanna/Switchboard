@@ -1,0 +1,25 @@
+Switchboard
+===========
+
+Copyright 2026 Visvesh Khanna
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Switchboard's design draws on ideas from these open-source projects. No
+source code is copied from them; they are credited because their designs
+shaped this one:
+
+  - MetaMCP (https://github.com/metatool-ai/metamcp), MIT License:
+    namespaces exposed as endpoints, per-tool overrides, a composable
+    middleware pipeline.
+  - MCPJungle (https://github.com/mcpjungle/mcpjungle), MPL-2.0:
+    tool groups built from included servers and tools minus excluded tools,
+    and re-checking access when a tool is called.
+  - Docker MCP Gateway (https://github.com/docker/mcp-gateway), MIT License:
+    profiles, a table of AI client configuration files, and routing on the
+    MCP client name.
+  - Cloudflare Agents Code Mode (https://github.com/cloudflare/agents),
+    MIT License: exposing MCP tools to model-written code as typed
+    functions, result unwrapping and structural truncation.
+  - Bifrost (https://github.com/maximhq/bifrost), Apache License 2.0:
+    code mode enabled per client and execution budgets.
