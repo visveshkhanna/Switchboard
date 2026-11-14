@@ -314,6 +314,23 @@ export async function ruleRemove(client: string | undefined) {
   console.log(`Removed rule ${bold(client)}.`)
 }
 
+// ── activity log ───────────────────────────────────────────────────────────
+
+export async function activity(value: string | undefined) {
+  const store = await openConfig()
+  if (value === 'on' || value === 'off') {
+    await store.update((c) => ({ ...c, settings: { ...c.settings, activityLog: value === 'on' } }))
+  } else if (value !== undefined) {
+    throw new UsageError('Use `activity on`, `activity off` or `activity` to see the setting.')
+  }
+  const { activityLog, retentionDays } = store.config.settings
+  console.log(
+    activityLog === undefined
+      ? `Activity log not set up yet: run \`${brand.name} activity on\` or \`off\`.`
+      : `Activity log ${activityLog ? green('on') : 'off'}${activityLog ? ` (kept ${retentionDays} days in ${paths().audit})` : ''}.`,
+  )
+}
+
 // ── secrets ────────────────────────────────────────────────────────────────
 
 async function readSecretValue(name: string): Promise<string> {
@@ -428,11 +445,13 @@ export async function clientList() {
         c.installed ? '' : dim('not found'),
         c.error
           ? red(c.error)
-          : c.connectedProfile
-            ? green(`→ ${c.connectedProfile}`)
-            : c.foreignEntry
-              ? yellow('foreign entry')
-              : '',
+          : c.connectedMode === 'auto'
+            ? green('→ automatic')
+            : c.connectedProfile
+              ? green(`→ ${c.connectedProfile}`)
+              : c.foreignEntry
+                ? yellow('foreign entry')
+                : '',
         String(c.serverCount || ''),
       ]),
       ['ID', 'CLIENT', 'INSTALLED', 'SWITCHBOARD', 'OTHER SERVERS'],
@@ -442,20 +461,29 @@ export async function clientList() {
     console.log(dim(`\nCreate a profile first: ${brand.name} profile add <name>`))
 }
 
-export async function clientConnect(id: string | undefined, opts: { profile?: string; port?: string }) {
+export async function clientConnect(
+  id: string | undefined,
+  opts: { profile?: string; port?: string; auto?: boolean },
+) {
   if (!id) throw new UsageError(`Give a client: ${CLIENTS.map((c) => c.id).join(', ')}.`)
-  const profile = slug(opts.profile, 'profile')
+  if (!opts.auto && !opts.profile)
+    throw new UsageError('Give --profile NAME, or --auto to let client rules decide.')
+  const profile = opts.auto ? null : slug(opts.profile, 'profile')
   const store = await openConfig()
-  if (!store.config.profiles[profile]) throw new UsageError(`No profile named "${profile}".`)
+  if (profile && !store.config.profiles[profile]) throw new UsageError(`No profile named "${profile}".`)
   const daemon = await runningDaemon()
   const port = opts.port ? Number(opts.port) : (daemon?.port ?? defaultPort())
   const { path, backup } = await connectClient(
     id,
-    { url: `http://127.0.0.1:${port}/p/${profile}/mcp`, profile },
+    { url: `http://127.0.0.1:${port}${profile ? `/p/${profile}` : ''}/mcp`, profile },
     defaultClientEnv(),
     paths().backups,
   )
-  console.log(`Connected ${bold(id)} to profile ${bold(profile)} in ${path}.`)
+  console.log(
+    profile
+      ? `Connected ${bold(id)} to profile ${bold(profile)} in ${path}.`
+      : `Connected ${bold(id)} to the shared endpoint in ${path}; client rules and the default profile pick its profile.`,
+  )
   if (backup) console.log(dim(`Backup: ${backup}`))
   console.log(dim('Restart or reload the client to pick it up.'))
 }

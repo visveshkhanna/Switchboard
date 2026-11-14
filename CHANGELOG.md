@@ -4,6 +4,19 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- An opt-in activity log: `switchboard up` asks on first start, and `switchboard activity on|off` changes it. Only tool names, timing and success are kept, for `settings.retentionDays` days.
+- `GET /api/stats` and `GET`/`PUT /api/settings` for the activity charts and settings.
+- Servers with `idleTimeoutSec: 0` start with the daemon and are kept running.
+- `switchboard client connect ID --auto` and `switchboard connect` without `--profile` use the shared `/mcp` endpoint, where client rules and the default profile pick the profile.
+
+### Fixed
+
+- Adding a server, or adding one to a profile a client already uses, now starts it to discover its tools and tells connected clients, instead of waiting until the server was tested by hand.
+- A server that crashes is restarted automatically with backoff.
+- Hand edits of `config.json` are no longer missed when the file watcher drops an event.
+
 ## [0.1.0] - 2026-11-14
 
 The first release.

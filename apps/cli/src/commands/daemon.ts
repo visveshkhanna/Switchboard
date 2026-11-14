@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { access, mkdir, open, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import {
   type ConnectionStatus,
@@ -22,6 +23,7 @@ import {
   dim,
   green,
   openBrowser,
+  openConfig,
   paths,
   red,
   runningDaemon,
@@ -69,6 +71,7 @@ export async function up(opts: {
     return
   }
 
+  await askAboutActivityLog()
   const root = webRoot()
   const daemon = await Daemon.create({
     port,
@@ -104,6 +107,25 @@ export async function up(opts: {
   }
   process.on('SIGINT', () => void stop())
   process.on('SIGTERM', () => void stop())
+}
+
+/** On the first interactive start, ask whether to keep an activity log. */
+async function askAboutActivityLog() {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return
+  const store = await openConfig()
+  if (store.config.settings.activityLog !== undefined) return
+  console.log(
+    `\n${bold('Keep an activity log?')} ${brand.displayName} can record which tools are called, how long they take and whether they succeed\n` +
+      `(never arguments or results) in ${dim(paths().audit)}, to chart activity in the web UI.`,
+  )
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  const answer = await rl.question('Keep it? [Y/n] ')
+  rl.close()
+  const enabled = !/^n/i.test(answer.trim())
+  await store.update((c) => ({ ...c, settings: { ...c.settings, activityLog: enabled } }))
+  console.log(
+    dim(`Activity log ${enabled ? 'on' : 'off'}. Change it any time with \`${brand.name} activity on|off\`.`),
+  )
 }
 
 export async function startDetached(port: number, host?: string) {
