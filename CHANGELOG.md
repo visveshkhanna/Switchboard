@@ -20,3 +20,6 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 - Offline BM25 tool search that understands camelCase and snake_case names.
 - Tool schemas rendered as TypeScript signatures for models.
 - The `auto` surface, which switches from `passthrough` to `meta` above `autoThreshold` tools.
+- The `code` tool surface: one `execute` tool runs model-written JavaScript that calls the profile's tools as typed methods, such as `await github.create_issue({...})`.
+- A QuickJS WebAssembly sandbox for code mode with no access to Node, the network or the file system, and per-profile budgets for time, memory, tool calls, code size and output size.
+- `catalog.search()` and `catalog.describe()` inside the sandbox for profiles too large to describe up front.
