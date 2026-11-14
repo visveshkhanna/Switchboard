@@ -88,6 +88,12 @@ export class UpstreamManager extends EventEmitter<ManagerEvents> {
     return run
   }
 
+  /** Start servers that should always run, and discover tools of any server not yet listed. */
+  warm(): Promise<void> {
+    for (const connection of this.#connections.values()) connection.keepAlive()
+    return this.ensureCatalog([...this.#connections.keys()])
+  }
+
   async stopAll(): Promise<void> {
     await Promise.all(this.list().map((c) => c.stop()))
   }

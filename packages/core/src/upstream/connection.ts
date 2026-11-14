@@ -34,6 +34,12 @@ export interface ConnectionStatus {
   pid?: number
   /** Open this to sign in, when state is `needs-auth`. */
   authUrl?: string
+  /** Automatic restarts after crashes since the daemon started. */
+  restarts: number
+  /** When the next automatic restart is due, after a crash. */
+  nextRestartAt?: string
+  /** The server is kept running (idleTimeoutSec 0) instead of starting on demand. */
+  keepRunning: boolean
 }
 
 export interface ConnectionDeps {
@@ -53,6 +59,10 @@ export interface CallOptions {
 
 const MAX_STDERR_LINES = 200
 const MAX_BACKOFF_MS = 30_000
+/** Crashes in a row before automatic restarts stop. */
+const MAX_CRASHES = 5
+/** A server that ran this long before crashing is considered healthy again. */
+const HEALTHY_AFTER_MS = 60_000
 
 export function configHash(config: ServerConfig): string {
   return createHash('sha256').update(JSON.stringify(config)).digest('hex').slice(0, 16)
@@ -84,6 +94,10 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
   #oauth?: StoredOAuthProvider
   #authUrl?: URL
   #pendingAuth?: StreamableHTTPClientTransport | SSEClientTransport
+  #restarts = 0
+  #crashes = 0
+  #restartTimer?: NodeJS.Timeout
+  #nextRestartAt?: Date
 
   constructor(
     readonly name: string,
@@ -119,7 +133,48 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
       syncedAt: entry?.syncedAt,
       pid,
       authUrl: this.#state === 'needs-auth' ? this.#authUrl?.toString() : undefined,
+      restarts: this.#restarts,
+      nextRestartAt: this.#nextRestartAt?.toISOString(),
+      keepRunning: this.keepRunning,
     }
+  }
+
+  /** idleTimeoutSec 0: start with the daemon and stay up. */
+  get keepRunning(): boolean {
+    return this.config.enabled && this.config.idleTimeoutSec === 0
+  }
+
+  /** Start a keep-running server, retrying with backoff if it fails. */
+  keepAlive(): void {
+    if (!this.keepRunning || this.#client || this.#connecting || this.#restartTimer) return
+    if (this.#state === 'needs-auth') return
+    this.ready().catch(() => this.#scheduleRestart())
+  }
+
+  /**
+   * After a crash, start the server again with exponential backoff, like
+   * editors do for language servers. Gives up after MAX_CRASHES in a row.
+   */
+  #scheduleRestart(): void {
+    if (this.#restartTimer || this.#stopping || !this.config.enabled) return
+    if (this.#crashes >= MAX_CRASHES) {
+      this.#lastError = `${this.#lastError ?? 'Crashed'} (stopped restarting after ${MAX_CRASHES} crashes in a row; restart it to try again)`
+      this.#setState('error')
+      return
+    }
+    const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** this.#crashes)
+    this.#crashes++
+    this.#nextRestartAt = new Date(Date.now() + delay)
+    this.#retryAt = 0
+    this.#emitStatus()
+    this.#restartTimer = setTimeout(() => {
+      this.#restartTimer = undefined
+      this.#nextRestartAt = undefined
+      this.#restarts++
+      this.deps.log.info(`restarting ${this.name} (attempt ${this.#crashes})`)
+      this.ready().catch(() => this.#scheduleRestart())
+    }, delay)
+    this.#restartTimer.unref()
   }
 
   get oauthState(): string | undefined {
@@ -230,6 +285,10 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
 
   async stop(): Promise<void> {
     clearTimeout(this.#idleTimer)
+    clearTimeout(this.#restartTimer)
+    this.#restartTimer = undefined
+    this.#nextRestartAt = undefined
+    this.#crashes = 0
     const client = this.#client
     this.#stopping = true
     this.#client = undefined
@@ -322,9 +381,11 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
       this.#client = undefined
       this.#transport = undefined
       if (!this.#stopping) {
-        this.deps.log.warn(`${this.name} exited`)
+        this.deps.log.warn(`${this.name} exited unexpectedly`)
         this.#lastError = this.#stderr.at(-1) ?? 'the server closed the connection'
-        this.#setState('stopped')
+        if (this.#startedAt && Date.now() - this.#startedAt.getTime() > HEALTHY_AFTER_MS) this.#crashes = 0
+        this.#setState('error')
+        this.#scheduleRestart()
       }
     }
     this.#transport = transport
@@ -339,6 +400,7 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
 
   #touch(): void {
     clearTimeout(this.#idleTimer)
+    if (this.keepRunning) return
     const idle = this.config.idleTimeoutSec
     if (!idle || this.#inFlight > 0 || !this.#client) return
     this.#idleTimer = setTimeout(() => {

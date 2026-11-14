@@ -14,7 +14,7 @@ afterEach(async () => {
 })
 
 const waitFor = async (check: () => boolean) => {
-  for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 20))
+  for (let i = 0; i < 400 && !check(); i++) await new Promise((r) => setTimeout(r, 20))
 }
 
 describe('ConfigStore', () => {

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { type FSWatcher, watch } from 'node:fs'
+import { type FSWatcher, unwatchFile, watch, watchFile } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
 import { type Config, ConfigError, parseConfig } from '@switchboard/shared'
@@ -83,12 +83,18 @@ export class ConfigStore extends EventEmitter<ConfigStoreEvents> {
       this.#reloadTimer = setTimeout(() => void this.#reload(), 100)
     })
     this.#watcher.unref()
+    // fs.watch can drop events on a busy system; polling once a second is a cheap backstop.
+    watchFile(this.path, { interval: 1000, persistent: false }, () => {
+      clearTimeout(this.#reloadTimer)
+      this.#reloadTimer = setTimeout(() => void this.#reload(), 100)
+    })
   }
 
   close(): void {
     clearTimeout(this.#reloadTimer)
     this.#watcher?.close()
     this.#watcher = undefined
+    unwatchFile(this.path)
   }
 
   async #reload(): Promise<void> {

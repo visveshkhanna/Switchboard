@@ -136,7 +136,12 @@ export class Daemon {
 
   #wire(): void {
     this.config.on('change', (next) => {
-      void this.upstream.apply(next).then(() => this.sessions.notifyChanges())
+      void this.upstream.apply(next).then(() => {
+        this.sessions.notifyChanges()
+        // New or changed servers are started now to discover their tools, so
+        // profiles that use them update without waiting for a client to ask.
+        return this.upstream.warm()
+      })
     })
     this.catalog.on('change', () => this.sessions.notifyChanges())
 
@@ -195,8 +200,8 @@ export class Daemon {
     this.#onListen?.(address.port)
     await writeJson(this.paths.pid, this.#info)
     this.config.watch()
-    if (this.options.warmCatalog !== false)
-      void this.upstream.ensureCatalog(Object.keys(this.config.config.servers))
+    for (const connection of this.upstream.list()) connection.keepAlive()
+    if (this.options.warmCatalog !== false) void this.upstream.warm()
     this.log.info(
       `${brand.displayName} listening on http://${host === '::1' ? '[::1]' : host}:${address.port}`,
     )
