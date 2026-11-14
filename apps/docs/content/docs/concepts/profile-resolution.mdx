@@ -56,7 +56,7 @@ This lets one plain `http://127.0.0.1:7690/mcp` entry serve different profiles t
 
 ## Default profile
 
-If nothing else applies, the session uses `defaultProfile`. Without a default profile, the connection is refused with HTTP `400` and a JSON-RPC error explaining the four ways to choose a profile. Set or clear it with:
+If nothing else applies, the session uses `defaultProfile`. Without a default profile, the client still connects, but **waits for a profile**: it sees no tools, and its instructions say where to assign one. Every client that connects is listed in the web UI's Clients page (and `switchboard client ls`), including clients Switchboard has no preset for. Pick a profile for a waiting client there, or run `switchboard rule add "<client name>" <profile>`, and its open session switches to that profile at once, without reconnecting. Set or clear it with:
 
 ```bash
 switchboard default work
@@ -68,5 +68,8 @@ switchboard default none
 A profile name in the path or the header that does not exist is an error: HTTP `400` with JSON-RPC error `-32602`, whose message lists the profiles that do exist, so the fix is easy to spot in the client's logs. Rules and the default profile cannot point at a missing profile: the configuration is rejected, and deleting a profile also removes its rules and clears it as the default.
 
 ## Each session is separate
+
+Sessions whose profile came from a client rule or the default profile follow changes to the rules and the default: change them and connected clients get the new tool list. Sessions that chose their profile by URL path or header never move.
+
 
 Every session gets its own view of its profile, and another client's activity never changes what it sees. When you edit a profile, or a server's tools change, only the sessions whose tool list actually changed are sent `notifications/tools/list_changed`. Sessions with no requests for six hours are closed.
