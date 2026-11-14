@@ -1,0 +1,32 @@
+name: AI client support
+description: Ask for Switchboard to connect another AI client automatically
+labels: ["client"]
+body:
+  - type: input
+    id: client
+    attributes:
+      label: Client
+      description: Name, version and link.
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration file
+      description: Where the client stores MCP servers on each OS, and a sample entry for an HTTP server (remove secrets).
+      render: json
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transports the client supports
+      multiple: true
+      options:
+        - Streamable HTTP
+        - SSE
+        - stdio only
+    validations:
+      required: true
