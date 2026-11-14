@@ -1,0 +1,185 @@
+name: Release
+
+# Push a tag like v0.1.0 to test, publish mcp-switchboard to npm with
+# provenance, and create the GitHub release with notes from CHANGELOG.md.
+# Run it by hand to build and pack without publishing anything.
+#
+# Publishing needs an NPM_TOKEN secret (an npm automation or granular
+# token), or a trusted publisher configured on npmjs.com for this workflow.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  test:
+    name: Test before release
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Check the changelog has this version
+        if: github.ref_type == 'tag' && runner.os == 'Linux'
+        run: .github/scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+        if: runner.os == 'Linux'
+      - run: pnpm typecheck
+        if: runner.os == 'Linux'
+      - run: pnpm build
+      - run: pnpm test
+
+  package:
+    name: Build and pack
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tarball: ${{ steps.pack.outputs.tarball }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version=${GITHUB_REF_NAME#v}
+          else
+            version="0.0.0-snapshot.${GITHUB_SHA::7}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        env:
+          SWITCHBOARD_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          (cd apps/cli && npm pkg set version="$SWITCHBOARD_VERSION")
+          pnpm build
+
+      - name: Pack
+        id: pack
+        run: |
+          cd apps/cli
+          cp ../../LICENSE ../../NOTICE ../../README.md .
+          tarball=$(npm pack --silent)
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+          mkdir -p ../../dist && mv "$tarball" ../../dist/
+
+      - name: Smoke test the packed CLI
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          dir=$(mktemp -d)
+          npm install --prefix "$dir" "./dist/$TARBALL"
+          "$dir/node_modules/.bin/switchboard" --version | tee /dev/stderr | grep -qxF "$VERSION"
+          test -f "$dir/node_modules/mcp-switchboard/dist/web/index.html"
+
+      - name: Attest build provenance
+        if: github.ref_type == 'tag'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/*.tgz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: dist/
+
+  publish-npm:
+    name: Publish to npm
+    needs: package
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: package
+          path: dist
+
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.package.outputs.version }}
+          TARBALL: ${{ needs.package.outputs.tarball }}
+        run: |
+          tag=latest
+          case "$VERSION" in *-*) tag=next ;; esac
+          if npm view "mcp-switchboard@$VERSION" version >/dev/null 2>&1; then
+            echo "mcp-switchboard@$VERSION is already on npm"
+            exit 0
+          fi
+          npm publish "dist/$TARBALL" --provenance --access public --tag "$tag"
+
+  github-release:
+    name: Publish GitHub release
+    needs: [package, publish-npm]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: package
+          path: dist
+
+      - name: Release notes from CHANGELOG.md
+        run: .github/scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG exists; updating its assets and notes"
+            gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            prerelease=()
+            case "$TAG" in *-*) prerelease=(--prerelease) ;; esac
+            gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" \
+              --title "Switchboard $TAG" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${prerelease[@]}"
+          fi

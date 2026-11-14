@@ -97,4 +97,11 @@ Client configuration files are described as data in `packages/core/src/clients/r
 
 ## Releases
 
-Maintainers release by moving the `Unreleased` section of `CHANGELOG.md` under a new version heading, setting the version in `apps/cli/package.json`, and pushing a `vX.Y.Z` tag. The release workflow tests, builds, publishes to npm with provenance and creates the GitHub release with the changelog notes.
+Maintainers release like this:
+
+1. Move the `Unreleased` section of [CHANGELOG.md](CHANGELOG.md) under a new heading, `## [X.Y.Z] - YYYY-MM-DD`, and commit it.
+2. Tag the commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+The [release workflow](.github/workflows/release.yml) then tests on Linux, macOS and Windows, sets the package version from the tag, builds the CLI and web UI, packs and smoke-tests the npm package, attests its build provenance, publishes it to npm with provenance (`next` for pre-releases such as `v0.2.0-rc.1`) and creates the GitHub release with the changelog section as notes. The tag must have a changelog section or nothing is published.
+
+Publishing needs an `NPM_TOKEN` repository secret, or a [trusted publisher](https://docs.npmjs.com/trusted-publishers) on npmjs.com for this workflow. The docs site deploys from `main` when `CLOUDFLARE_API_TOKEN` (secret) and `CLOUDFLARE_ACCOUNT_ID` (variable) are set.
