@@ -25,6 +25,7 @@ switchboard default PROFILE|none                  profile for clients nothing el
 
 switchboard client ls                             AI clients and their connections
 switchboard client connect ID --profile NAME [--port N]
+switchboard client connect ID --auto              shared endpoint; client rules pick the profile
 switchboard client disconnect ID
 switchboard rule add "CLIENT-GLOB" PROFILE        pick a profile by MCP client name
 switchboard rule ls | rm "CLIENT-GLOB"
@@ -32,7 +33,9 @@ switchboard rule ls | rm "CLIENT-GLOB"
 switchboard secret set NAME [VALUE]               store a secret (prompts if no value)
 switchboard secret ls | rm NAME
 
-switchboard connect --profile NAME                stdio bridge for stdio-only clients
+switchboard connect [--profile NAME]              stdio bridge for stdio-only clients
+
+switchboard activity [on|off]                     keep a log of tool calls for activity charts
 
 switchboard --version
 switchboard --help
@@ -42,7 +45,7 @@ switchboard --help
 
 ## up
 
-Starts the daemon on `127.0.0.1`, port `7690` unless `--port` or `SWITCHBOARD_PORT` says otherwise, serves the [MCP endpoints](/docs/reference/http-api) and the web UI on that port, and opens the web UI in your browser unless `--no-open` is given. It runs in the foreground until stopped with Ctrl+C. `--detach` (`-d`) starts it in the background instead, logging to `~/.switchboard/logs/daemon.log`. `--host` binds another address, and `--log` sets the log level (`debug`, `info`, `warn`, `error`). If the daemon is already running, `up` says so and opens the web UI.
+Starts the daemon on `127.0.0.1`, port `7690` unless `--port` or `SWITCHBOARD_PORT` says otherwise, serves the [MCP endpoints](/docs/reference/http-api) and the web UI on that port, and opens the web UI in your browser unless `--no-open` is given. It runs in the foreground until stopped with Ctrl+C. `--detach` (`-d`) starts it in the background instead, logging to `~/.switchboard/logs/daemon.log`. `--host` binds another address, and `--log` sets the log level (`debug`, `info`, `warn`, `error`). If the daemon is already running, `up` says so and opens the web UI. The first time it runs in a terminal, `up` asks whether to keep an [activity log](#activity).
 
 ## stop
 
@@ -85,7 +88,7 @@ Reads the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, W
 
 ## client
 
-`client ls` lists the supported clients, whether each is installed, the profile it is connected to, and how many other servers its configuration has. `client connect` writes a `switchboard` entry into the client's MCP configuration, after backing the file up, and `client disconnect` removes it. Client ids: `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex`, `gemini-cli`. See [Connecting clients](/docs/guides/connect-clients).
+`client ls` lists the supported clients, whether each is installed, the profile it is connected to, and how many other servers its configuration has. `client connect` writes a `switchboard` entry into the client's MCP configuration, after backing the file up, and `client disconnect` removes it. With `--auto` instead of `--profile`, the entry points at the shared `/mcp` endpoint, where [client rules](/docs/concepts/profile-resolution#client-rules) and the default profile choose the profile. Client ids: `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex`, `gemini-cli`. See [Connecting clients](/docs/guides/connect-clients).
 
 ## secret
 
@@ -97,7 +100,15 @@ Reads the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, W
 switchboard connect --profile work
 ```
 
-A bridge between stdio and the daemon's HTTP endpoint, for clients that can only start MCP servers as local processes. It starts the daemon in the background if it is not running. See [stdio bridge](/docs/guides/connect-clients#stdio-bridge).
+A bridge between stdio and the daemon's HTTP endpoint, for clients that can only start MCP servers as local processes. It starts the daemon in the background if it is not running. Without `--profile`, it uses the shared `/mcp` endpoint, where client rules and the default profile decide. See [stdio bridge](/docs/guides/connect-clients#stdio-bridge).
+
+## activity
+
+```bash
+switchboard activity on
+```
+
+Turns the activity log on or off, or shows the setting. When it is on, every tool call's name, client, profile, duration and success (never its arguments or results) is appended to `~/.switchboard/audit.jsonl` and kept for `settings.retentionDays` days, 30 by default. The web UI's Activity page charts it.
 
 ## Environment
 

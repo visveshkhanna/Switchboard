@@ -46,10 +46,10 @@ A profile can rename a tool or rewrite its description with `overrides`, keyed b
 
 Profiles select tools; they do not start their own copies of servers. Switchboard runs **one process per server**, shared by every client and profile that uses it:
 
-- A server starts on the first tool call that needs it, not when the daemon starts.
-- Tool lists come from a cached catalog (`catalog.json`), so `tools/list` answers at once even when no server is running. A server whose tools have never been listed is started once to fill the catalog.
-- A server that has had no calls for `idleTimeoutSec` (10 minutes by default) is stopped.
-- A server that fails to start is retried with backoff, up to 30 seconds between attempts. While it is failing, only its own tools are affected.
+- When a server is added or its configuration changes, Switchboard starts it once to discover its tools, and clients whose profiles use it are told their tool list changed.
+- After that it starts on the first tool call that needs it, and stops after `idleTimeoutSec` without calls (10 minutes by default). With `idleTimeoutSec: 0` it starts with the daemon and keeps running.
+- Tool lists come from a cached catalog (`catalog.json`), so `tools/list` answers at once even when no server is running.
+- A server that crashes is restarted automatically, with backoff from 1 to 30 seconds; after five crashes in a row it stays stopped until you restart it. A server that fails to start is retried the same way. While it is failing, only its own tools are affected.
 - Ten clients using the same three servers make three processes, not thirty.
 
 ## Presentation

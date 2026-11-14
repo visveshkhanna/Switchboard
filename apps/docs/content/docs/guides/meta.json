@@ -1,1 +1,1 @@
-{ "title": "Guides", "pages": ["connect-clients", "import-servers", "secrets-and-oauth", "web-ui"] }
+{"title": "Guides", "pages": ["setup-with-ai", "connect-clients", "import-servers", "secrets-and-oauth", "web-ui"]}

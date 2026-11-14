@@ -1,0 +1,30 @@
+---
+title: Set up with AI
+description: Let your coding agent set Switchboard up for you.
+---
+
+Your AI agent can do the setup: find the MCP servers you already use, propose profiles, and connect itself. Start the daemon, then paste this prompt into Claude Code, Cursor, Codex or any agent that can run commands. The web UI's **Set up with AI** button gives you the same prompt filled in with your current profiles.
+
+```bash
+npx mcp-switchboard up -d
+```
+
+```text
+Set up Switchboard (https://switchboard.visvesh.dev), a local MCP aggregator, for me.
+It runs at http://127.0.0.1:7690. Use the `npx mcp-switchboard` CLI (or `switchboard` if installed).
+
+1. Run `npx mcp-switchboard status` and `npx mcp-switchboard import` to see my existing
+   MCP servers. Import them with `npx mcp-switchboard import --yes`.
+2. Look at the servers and propose profiles, for example `personal` and `work`, with the
+   servers each should contain. Ask me before creating anything.
+3. Create the profiles I approve:
+   `npx mcp-switchboard profile add NAME --servers a,b`
+4. Move any tokens that were imported as plain text into secrets:
+   `npx mcp-switchboard secret set NAME`, then reference them as secret://NAME.
+5. Connect this client to the profile I choose:
+   `npx mcp-switchboard client connect <cursor|claude-code|vscode|windsurf|codex|gemini-cli|claude-desktop> --profile NAME`
+6. Run `npx mcp-switchboard doctor` and fix anything it reports, then tell me to restart
+   the client so it picks up the new MCP entry.
+```
+
+Review what the agent proposes before it connects anything: it edits your client's MCP configuration (with a backup in `~/.switchboard/backups`).

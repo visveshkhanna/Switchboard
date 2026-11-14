@@ -96,6 +96,13 @@ See [Profile resolution](/docs/concepts/profile-resolution).
 
 The profile for connections that nothing else assigns; it must exist. Without one, such connections are refused.
 
+## settings
+
+| Field | Type | Description |
+|---|---|---|
+| `activityLog` | boolean | keep tool-call activity in `audit.jsonl` for the Activity charts. Unset until you choose, on the first `switchboard up` or in the web UI |
+| `retentionDays` | number | days of activity to keep. Default `30` |
+
 ## Other files
 
 See [Where Switchboard keeps its files](/docs/installation#where-switchboard-keeps-its-files) for the other files in `~/.switchboard`.
