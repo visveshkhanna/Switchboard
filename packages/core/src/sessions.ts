@@ -2,11 +2,17 @@ import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import {
+  CallToolRequestSchema,
+  type CallToolResult,
+  ListToolsRequestSchema,
+  type Tool,
+} from '@modelcontextprotocol/sdk/types.js'
 import { brand } from '@switchboard/shared'
-import type { Gateway } from './gateway.ts'
+import { errorResult, type Gateway } from './gateway.ts'
 import type { Logger } from './logger.ts'
 import type { ProfileView } from './profiles/view.ts'
+import type { ResolvedVia, SeenClients } from './seen-clients.ts'
 import { type ConcreteSurface, pickSurface, type ToolSurface } from './surfaces/types.ts'
 import type { UpstreamManager } from './upstream/manager.ts'
 
@@ -17,10 +23,11 @@ const SESSION_IDLE_MS = 6 * 60 * 60 * 1000
 
 export interface SessionInfo {
   id: string
-  profile: string
-  via: string
+  /** null while the client waits for a profile to be assigned. */
+  profile: string | null
+  via: ResolvedVia
   client?: { name: string; version: string }
-  surface: ConcreteSurface
+  surface: ConcreteSurface | null
   createdAt: string
   lastSeenAt: string
 }
@@ -41,11 +48,21 @@ export interface SessionDeps {
   gateway: Gateway
   upstream: UpstreamManager
   surfaces: Record<ConcreteSurface, ToolSurface>
+  seen?: SeenClients
+  /** The profile client rules and the default profile give a client name now. */
+  resolve: (clientName: string | undefined) => { profile: string; via: 'client-rule' | 'default' } | undefined
+  /** Where the user assigns profiles, for messages to waiting clients. */
+  adminUrl: () => string
   log: Logger
   version: string
 }
 
-/** One MCP server object per client session, so each client gets its own profile view. */
+/**
+ * One MCP server object per client session, so each client gets its own
+ * profile view. Sessions whose profile came from client rules or the default
+ * profile follow rule changes; sessions with no matching profile wait with
+ * no tools until one is assigned.
+ */
 export class SessionRegistry extends EventEmitter<SessionEvents> {
   #sessions = new Map<string, Session>()
   #sweeper: NodeJS.Timeout
@@ -78,18 +95,34 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
     return this.deps.surfaces[pickSurface(view)]
   }
 
+  #waitingMessage(name?: string): string {
+    return (
+      `${brand.displayName} has no profile for this client${name ? ` ("${name}")` : ''} yet, so it has no tools. ` +
+      `Assign a profile at ${this.deps.adminUrl()}/clients and its tools appear without reconnecting.`
+    )
+  }
+
   /** Create the transport and server for a new session. It is registered once initialize succeeds. */
-  async create(profile: string, via: string): Promise<Session> {
+  async create(
+    profile: string | null,
+    via: ResolvedVia,
+    clientName?: string,
+    clientVersion?: string,
+  ): Promise<Session> {
     const { gateway, log } = this.deps
     // Servers never listed before are started now, so the first session gets
     // their tools and instructions. Later sessions are answered from the catalog.
-    const view = await this.#viewWithCatalog(profile)
-    const surface = this.surfaceFor(view)
+    const view = profile ? await this.#viewWithCatalog(profile) : undefined
+    const surface = view ? this.surfaceFor(view) : undefined
     const server = new Server(
-      { name: brand.name, title: `${brand.displayName} · ${profile}`, version: this.deps.version },
+      {
+        name: brand.name,
+        title: `${brand.displayName}${profile ? ` · ${profile}` : ''}`,
+        version: this.deps.version,
+      },
       {
         capabilities: { tools: { listChanged: true } },
-        instructions: surface.instructions(view),
+        instructions: view && surface ? surface.instructions(view) : this.#waitingMessage(clientName),
       },
     )
     const now = new Date().toISOString()
@@ -97,7 +130,8 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
       id: '',
       profile,
       via,
-      surface: surface.kind,
+      client: clientName ? { name: clientName, version: clientVersion ?? '' } : undefined,
+      surface: surface?.kind ?? null,
       createdAt: now,
       lastSeenAt: now,
       server,
@@ -118,19 +152,17 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       session.touch()
-      const current = await this.#viewWithCatalog(profile)
-      const currentSurface = this.surfaceFor(current)
-      session.surface = currentSurface.kind
-      const tools = currentSurface.listTools(current)
+      const tools = await this.#listTools(session, true)
       session.toolsKey = toolsKey(tools)
       return { tools }
     })
 
-    server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+    server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
       session.touch()
-      const current = gateway.view(profile)
+      if (!session.profile) return errorResult(this.#waitingMessage(session.client?.name))
+      const current = gateway.view(session.profile)
       return this.surfaceFor(current).callTool(request.params.name, request.params.arguments, current, {
-        profile,
+        profile: session.profile,
         session: session.id,
         client: session.client?.name,
         signal: extra.signal,
@@ -140,7 +172,14 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
     server.oninitialized = () => {
       const info = server.getClientVersion()
       if (info) session.client = { name: info.name, version: info.version }
-      log.info(`session ${session.id.slice(0, 8)} opened`, { profile, via, client: info?.name })
+      if (session.client) {
+        this.deps.seen?.record(session.client.name, session.client.version, session.via, session.profile)
+      }
+      log.info(`session ${session.id.slice(0, 8)} opened`, {
+        profile: session.profile ?? '(waiting)',
+        via: session.via,
+        client: session.client?.name,
+      })
       this.emit('change')
     }
     server.onclose = () => {
@@ -150,13 +189,48 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
     return session
   }
 
-  /** Tell sessions whose tool list changed to list again. */
+  async #listTools(session: Session, waitForCatalog: boolean): Promise<Tool[]> {
+    if (!session.profile) return []
+    const view = waitForCatalog
+      ? await this.#viewWithCatalog(session.profile)
+      : this.deps.gateway.view(session.profile)
+    const surface = this.surfaceFor(view)
+    session.surface = surface.kind
+    return surface.listTools(view)
+  }
+
+  /**
+   * After a config or catalog change: move sessions whose profile came from
+   * client rules or the default (or that were waiting) to what those give
+   * now, and tell sessions whose tool list changed to list again.
+   */
   notifyChanges(): void {
+    let moved = false
     for (const session of this.#sessions.values()) {
+      if (session.via === 'client-rule' || session.via === 'default' || session.via === 'unassigned') {
+        const next = this.deps.resolve(session.client?.name)
+        const profile = next?.profile ?? null
+        const via: ResolvedVia = next?.via ?? 'unassigned'
+        if (profile !== session.profile || via !== session.via) {
+          this.deps.log.info(`session ${session.id.slice(0, 8)} moved to ${profile ?? '(waiting)'}`, {
+            client: session.client?.name,
+          })
+          session.profile = profile
+          session.via = via
+          moved = true
+          if (session.client)
+            this.deps.seen?.record(session.client.name, session.client.version, via, profile)
+        }
+      }
       let key: string
       try {
-        const view = this.deps.gateway.view(session.profile)
-        key = toolsKey(this.surfaceFor(view).listTools(view))
+        if (!session.profile) key = ''
+        else {
+          const view = this.deps.gateway.view(session.profile)
+          const surface = this.surfaceFor(view)
+          session.surface = surface.kind
+          key = toolsKey(surface.listTools(view))
+        }
       } catch {
         // The profile was deleted: the next request will fail with a clear error.
         key = 'deleted'
@@ -165,6 +239,21 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
       session.toolsKey = key
       session.server.sendToolListChanged().catch(() => undefined)
     }
+    if (moved) this.emit('change')
+  }
+
+  /** Open sessions per client name, and how many of them wait for a profile. */
+  countsByClient(): Map<string, { sessions: number; waiting: number }> {
+    const counts = new Map<string, { sessions: number; waiting: number }>()
+    for (const session of this.#sessions.values()) {
+      const name = session.client?.name
+      if (!name) continue
+      const entry = counts.get(name) ?? { sessions: 0, waiting: 0 }
+      entry.sessions++
+      if (!session.profile) entry.waiting++
+      counts.set(name, entry)
+    }
+    return counts
   }
 
   async closeAll(): Promise<void> {

@@ -15,6 +15,7 @@ import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { connectClient, disconnectClient, importCandidates, listClients } from '../clients/files.ts'
 import type { Daemon } from '../daemon.ts'
+import { resolveProfile } from '../profiles/resolve.ts'
 import { buildProfileView } from '../profiles/view.ts'
 import { computeStats, RANGES, type Range } from '../stats.ts'
 import { pickSurface } from '../surfaces/types.ts'
@@ -275,6 +276,41 @@ export function adminApi(daemon: Daemon): Hono {
     return c.json(computeStats(events, range, source))
   })
 
+  // Every MCP client that has connected, including ones without a preset.
+  const seenClients = () => {
+    const counts = daemon.sessions.countsByClient()
+    const cfg = config()
+    return daemon.seen.list().map((client) => {
+      const rule = cfg.clientRules.find((r) => r.client === client.name)
+      const matched = resolveProfile({ clientName: client.name }, cfg)
+      return {
+        ...client,
+        ruleProfile: rule?.profile ?? null,
+        matchedProfile: matched.ok ? matched.profile : null,
+        sessions: counts.get(client.name)?.sessions ?? 0,
+        waiting: counts.get(client.name)?.waiting ?? 0,
+      }
+    })
+  }
+  api.get('/seen-clients', (c) => c.json(seenClients()))
+  /** Give a client a profile with an exact-name rule that wins over the others; null removes it. */
+  api.put('/seen-clients/:name/profile', async (c) => {
+    try {
+      const name = c.req.param('name')
+      const { profile } = z.object({ profile: slugSchema.nullable() }).parse(await c.req.json())
+      if (profile && !config().profiles[profile])
+        return c.json({ error: `Unknown profile "${profile}"` }, 404)
+      await update((d) => {
+        const others = d.clientRules.filter((r) => r.client !== name)
+        return { ...d, clientRules: profile ? [{ client: name, profile }, ...others] : others }
+      })
+      return c.json(seenClients().find((s) => s.name === name) ?? null)
+    } catch (error) {
+      return problem(c, error)
+    }
+  })
+  api.delete('/seen-clients/:name', (c) => c.json({ ok: daemon.seen.forget(c.req.param('name')) }))
+
   // Sessions and activity
   api.get('/sessions', (c) => c.json(daemon.sessions.list()))
   api.get('/audit', (c) => c.json(daemon.audit.recent(Number(c.req.query('limit') ?? 200))))
@@ -285,6 +321,8 @@ export function adminApi(daemon: Daemon): Hono {
       const onStatus = (s: unknown) => void send('server', s)
       const onSessions = () => void send('sessions', daemon.sessions.list())
       const onConfig = () => void send('config', daemon.config.config)
+      const onSeen = () => void send('clients', seenClients())
+      daemon.seen.on('change', onSeen)
       daemon.audit.on('event', onAudit)
       daemon.upstream.on('status', onStatus)
       daemon.sessions.on('change', onSessions)
@@ -298,6 +336,7 @@ export function adminApi(daemon: Daemon): Hono {
       daemon.upstream.off('status', onStatus)
       daemon.sessions.off('change', onSessions)
       daemon.config.off('change', onConfig)
+      daemon.seen.off('change', onSeen)
     }),
   )
 

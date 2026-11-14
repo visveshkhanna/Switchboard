@@ -58,9 +58,8 @@ describe('profiles over HTTP', () => {
     expect(t.daemon.sessions.list()[0]).toMatchObject({ profile: 'work', via: 'client-rule' })
   })
 
-  it('refuses clients without a profile and explains how to pick one', async () => {
+  it('refuses unknown profiles named in the URL', async () => {
     t = await startDaemon(baseConfig)
-    await expect(t.connect('/mcp', { clientName: 'unknown' })).rejects.toThrow(/No Switchboard profile/)
     await expect(t.connect('/p/nope/mcp')).rejects.toThrow(/Unknown Switchboard profile .*nope/)
   })
 

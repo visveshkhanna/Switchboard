@@ -11,7 +11,7 @@ export interface ResolveInput {
 
 export type Resolution =
   | { ok: true; profile: string; via: 'path' | 'header' | 'client-rule' | 'default' }
-  | { ok: false; message: string }
+  | { ok: false; reason: 'unknown-profile' | 'unmatched'; message: string }
 
 /** Pick a profile: URL path, then header, then client rules, then the default. */
 export function resolveProfile(input: ResolveInput, config: Config): Resolution {
@@ -21,6 +21,7 @@ export function resolveProfile(input: ResolveInput, config: Config): Resolution 
       ? { ok: true, profile: name, via }
       : {
           ok: false,
+          reason: 'unknown-profile',
           message: `Unknown ${brand.displayName} profile "${name}". Profiles: ${known.join(', ') || '(none yet)'}.`,
         }
 
@@ -33,6 +34,7 @@ export function resolveProfile(input: ResolveInput, config: Config): Resolution 
   if (config.defaultProfile) return { ok: true, profile: config.defaultProfile, via: 'default' }
   return {
     ok: false,
+    reason: 'unmatched',
     message:
       `No ${brand.displayName} profile for this client${input.clientName ? ` ("${input.clientName}")` : ''}. ` +
       `Use the URL /p/<profile>/mcp, the ${brand.profileHeader} header, a client rule or a default profile. ` +

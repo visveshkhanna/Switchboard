@@ -216,7 +216,13 @@ export async function status(opts: { json?: boolean }) {
     console.log()
     console.log(
       table(
-        sessions.map((s) => [s.client?.name ?? '?', s.profile, s.via, s.surface, s.lastSeenAt.slice(11, 19)]),
+        sessions.map((s) => [
+          s.client?.name ?? '?',
+          s.profile ?? yellow('waiting'),
+          s.via,
+          s.surface ?? '-',
+          s.lastSeenAt.slice(11, 19),
+        ]),
         ['CLIENT', 'PROFILE', 'VIA', 'SURFACE', 'LAST SEEN'],
       ),
     )

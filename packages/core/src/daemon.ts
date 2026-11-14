@@ -16,8 +16,10 @@ import { mcpHandler } from './http/mcp.ts'
 import { webUi } from './http/web.ts'
 import { createLogger, type Logger } from './logger.ts'
 import { type Paths, resolvePaths } from './paths.ts'
+import { resolveProfile } from './profiles/resolve.ts'
 import { ProfileViews } from './profiles/view.ts'
 import { openSecretBackend, type SecretBackend } from './secrets.ts'
+import { SeenClients } from './seen-clients.ts'
 import { SessionRegistry } from './sessions.ts'
 import { codeSurface } from './surfaces/code.ts'
 import { metaSurface } from './surfaces/meta.ts'
@@ -70,6 +72,7 @@ export class Daemon {
     readonly gateway: Gateway,
     readonly sessions: SessionRegistry,
     readonly surfaces: Record<ConcreteSurface, ToolSurface>,
+    readonly seen: SeenClients,
     readonly audit: AuditLog,
     readonly adminToken: string,
     readonly log: Logger,
@@ -101,7 +104,22 @@ export class Daemon {
     })
     const gateway = new Gateway(views, upstream, audit)
     const surfaces = await createSurfaces(gateway)
-    const sessions = new SessionRegistry({ gateway, upstream, surfaces, log: log.child('mcp'), version })
+    const seen = await SeenClients.open(paths.seenClients)
+    const sessions = new SessionRegistry({
+      gateway,
+      upstream,
+      surfaces,
+      seen,
+      log: log.child('mcp'),
+      version,
+      resolve: (clientName) => {
+        const r = resolveProfile({ clientName }, config.config)
+        return r.ok && (r.via === 'client-rule' || r.via === 'default')
+          ? { profile: r.profile, via: r.via }
+          : undefined
+      },
+      adminUrl: () => `http://127.0.0.1:${port ?? brand.defaultPort}`,
+    })
     const adminToken = await loadAdminToken(paths.adminToken)
 
     const daemon = new Daemon(
@@ -114,6 +132,7 @@ export class Daemon {
       gateway,
       sessions,
       surfaces,
+      seen,
       audit,
       adminToken,
       log,
@@ -226,6 +245,7 @@ export class Daemon {
     await this.upstream.stopAll()
     await this.catalog.flush()
     await this.audit.flush()
+    await this.seen.flush()
     await rm(this.paths.pid, { force: true })
   }
 }

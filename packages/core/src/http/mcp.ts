@@ -8,7 +8,7 @@ interface JsonRpcMessage {
   jsonrpc?: string
   id?: string | number | null
   method?: string
-  params?: { clientInfo?: { name?: string } }
+  params?: { clientInfo?: { name?: string; version?: string } }
 }
 
 function rpcError(status: number, message: string, id: JsonRpcMessage['id'] = null, code = -32000): Response {
@@ -56,12 +56,17 @@ export function mcpHandler(deps: { sessions: SessionRegistry; config: () => Conf
       },
       deps.config(),
     )
-    if (!resolution.ok) {
+    const clientInfo = init.params?.clientInfo
+    if (!resolution.ok && resolution.reason === 'unknown-profile') {
       deps.log.warn(resolution.message)
       return rpcError(400, resolution.message, init.id ?? null, -32602)
     }
-
-    const session = await deps.sessions.create(resolution.profile, resolution.via)
+    // A client nothing assigns a profile to is let in with no tools, and
+    // shown in the web UI so the user can pick its profile.
+    const session = resolution.ok
+      ? await deps.sessions.create(resolution.profile, resolution.via, clientInfo?.name, clientInfo?.version)
+      : await deps.sessions.create(null, 'unassigned', clientInfo?.name, clientInfo?.version)
+    if (!resolution.ok) deps.log.info(`${clientInfo?.name ?? 'a client'} is waiting for a profile`)
     return session.transport.handleRequest(c.req.raw, { parsedBody: body })
   }
 }

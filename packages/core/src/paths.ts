@@ -12,6 +12,7 @@ export interface Paths {
   logs: string
   backups: string
   pid: string
+  seenClients: string
 }
 
 /** Where Switchboard keeps its state: `SWITCHBOARD_HOME`, or `~/.switchboard`. */
@@ -26,5 +27,6 @@ export function resolvePaths(home = brandEnv('HOME') ?? join(homedir(), brand.st
     logs: join(home, 'logs'),
     backups: join(home, 'backups'),
     pid: join(home, 'daemon.json'),
+    seenClients: join(home, 'seen-clients.json'),
   }
 }

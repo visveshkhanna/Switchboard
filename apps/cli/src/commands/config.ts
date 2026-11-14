@@ -9,6 +9,7 @@ import {
   importCandidates,
   listClients,
   openSecretBackend,
+  SeenClients,
   silentLogger,
   UpstreamConnection,
 } from '@switchboard/core'
@@ -457,6 +458,25 @@ export async function clientList() {
       ['ID', 'CLIENT', 'INSTALLED', 'SWITCHBOARD', 'OTHER SERVERS'],
     ),
   )
+  const seen = (await SeenClients.open(paths().seenClients)).list()
+  if (seen.length) {
+    console.log(`\n${bold('Clients that have connected')}`)
+    console.log(
+      table(
+        seen.map((c) => [
+          c.name,
+          c.version ?? '',
+          c.lastProfile ?? yellow('waiting'),
+          c.lastVia,
+          c.lastSeen.slice(0, 16).replace('T', ' '),
+        ]),
+        ['NAME', 'VERSION', 'PROFILE', 'VIA', 'LAST SEEN'],
+      ),
+    )
+    if (seen.some((c) => !c.lastProfile)) {
+      console.log(dim(`\nGive a waiting client a profile: ${brand.name} rule add "<name>" <profile>`))
+    }
+  }
   if (!Object.keys(store.config.profiles).length)
     console.log(dim(`\nCreate a profile first: ${brand.name} profile add <name>`))
 }
