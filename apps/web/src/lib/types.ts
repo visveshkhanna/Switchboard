@@ -59,19 +59,39 @@ export type TestResult =
 
 export interface SessionInfo {
   id: string
-  profile: string
+  /** null while the client waits for a profile (`via: 'unassigned'`). */
+  profile: string | null
   via: string
   client?: { name: string; version: string }
-  surface: 'passthrough' | 'meta' | 'code'
+  /** null while waiting for a profile. */
+  surface: 'passthrough' | 'meta' | 'code' | null
   createdAt: string
   lastSeenAt: string
+}
+
+/** An MCP client the daemon has seen, by its clientInfo.name. */
+export interface SeenClient {
+  name: string
+  version?: string
+  firstSeen: string
+  lastSeen: string
+  lastVia: 'path' | 'header' | 'client-rule' | 'default' | 'unassigned'
+  lastProfile: string | null
+  /** Profile from an exact client rule for this name, if any. */
+  ruleProfile: string | null
+  /** What the shared /mcp URL would resolve to now via rules or the default. */
+  matchedProfile: string | null
+  /** Open sessions waiting for a profile. */
+  waiting: number
+  /** Open sessions. */
+  sessions: number
 }
 
 export interface AuditEvent {
   ts: string
   session?: string
   client?: string
-  profile: string
+  profile: string | null
   tool: string
   via: 'direct' | 'call_tool' | 'code'
   server?: string

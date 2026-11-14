@@ -8,6 +8,7 @@ import type {
   ConnectionStatus,
   ImportCandidate,
   Secrets,
+  SeenClient,
   ServerRow,
   SessionInfo,
   Settings,
@@ -27,6 +28,7 @@ export const keys = {
   secrets: ['secrets'] as const,
   import: ['import'] as const,
   settings: ['settings'] as const,
+  seenClients: ['seen-clients'] as const,
   stats: (range: StatsRange) => ['stats', range] as const,
   tools: (name: string) => ['tools', name] as const,
   logs: (name: string) => ['logs', name] as const,
@@ -66,6 +68,13 @@ export const useStats = (range: StatsRange) =>
     queryFn: () => optional<Stats>(`/stats?range=${range}`),
     refetchInterval: 30_000,
     placeholderData: (prev) => prev,
+  })
+/** MCP clients the daemon has seen; null when the daemon does not support it. */
+export const useSeenClients = () =>
+  useQuery({
+    queryKey: keys.seenClients,
+    queryFn: () => optional<SeenClient[]>('/seen-clients'),
+    refetchInterval: 30_000,
   })
 export const useTools = (name: string, enabled = true) =>
   useQuery({
@@ -109,10 +118,15 @@ export function useLiveEvents(qc: QueryClient): LiveState {
       )
       if (status.state === 'ready') void qc.invalidateQueries({ queryKey: keys.tools(status.name) })
     })
+    source.addEventListener('clients', (e) => {
+      qc.setQueryData(keys.seenClients, parse(e) as SeenClient[])
+    })
     source.addEventListener('sessions', (e) => {
       const sessions = parse(e) as SessionInfo[]
       qc.setQueryData(keys.sessions, sessions)
       qc.setQueryData<Status>(keys.status, (old) => (old ? { ...old, sessions: sessions.length } : old))
+      // Older daemons send no `clients` events; keep the seen list fresh from session changes too.
+      void qc.invalidateQueries({ queryKey: keys.seenClients })
     })
     source.addEventListener('config', (e) => {
       const config = parse(e) as ConfigWithSettings
@@ -121,6 +135,8 @@ export function useLiveEvents(qc: QueryClient): LiveState {
       void qc.invalidateQueries({ queryKey: keys.servers })
       void qc.invalidateQueries({ queryKey: keys.status })
       void qc.invalidateQueries({ queryKey: keys.import })
+      // Rules or the default changed: what /mcp resolves to may have too.
+      void qc.invalidateQueries({ queryKey: keys.seenClients })
     })
     return () => source.close()
   }, [qc])

@@ -165,7 +165,7 @@ export function agentPrompt({
 ## What ${brand.displayName} is
 ${brand.displayName} is a daemon running on my machine at ${baseUrl(port)}. It runs my MCP servers once and serves them to every AI client through "profiles": named groups of servers and tools, each at its own Streamable HTTP endpoint:
   ${baseUrl(port)}/p/<profile>/mcp
-There is also a shared endpoint, ${sharedUrl(port)}, where the profile is picked by client rules (a glob on the MCP client name) or the default profile.
+There is also a shared endpoint, ${sharedUrl(port)}, where the profile is picked by client rules (a glob on the MCP client name) or the default profile. A client that matches neither still connects but waits, with no tools, until a profile is assigned to it (in the dashboard's Clients page or with a rule).
 Docs: ${brand.docsUrl}/docs
 
 ## Current state

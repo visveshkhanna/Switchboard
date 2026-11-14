@@ -23,6 +23,7 @@ import {
   UrlField,
 } from '@/components/common'
 import { AUTO } from '@/components/SetupWithAI'
+import { SeenClientsCard } from '@/components/seen-clients'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -72,11 +73,15 @@ export function ClientsPage() {
           <TriangleAlertIcon />
           <AlertTitle>No profiles yet</AlertTitle>
           <AlertDescription>
-            You can still connect in automatic mode, but the shared URL refuses clients until a profile
-            exists. <Link to="/profiles/new">Create a profile</Link>.
+            You can still connect in automatic mode; clients on the shared URL wait without tools until a
+            profile exists and you assign it. <Link to="/profiles/new">Create a profile</Link>.
           </AlertDescription>
         </Alert>
       )}
+
+      <SeenClientsCard />
+
+      <h2 className="font-heading text-base font-medium">Set up a known client</h2>
 
       {clients.isPending ? (
         <LoadingState rows={4} />
@@ -494,14 +499,14 @@ function DefaultProfileCard({ current, profiles }: { current?: string; profiles:
             disabled={save.isPending}
             onValueChange={(v) => save.mutate(v === NONE ? null : v)}
             options={[
-              { value: NONE, label: 'None: refuse unmatched clients' },
+              { value: NONE, label: 'None: hold new clients until you assign a profile' },
               ...profiles.map((p) => ({ value: p, label: p })),
             ]}
           />
           <FieldDescription>
             {current
               ? `Unmatched clients get "${current}". Saved immediately to config.json.`
-              : 'With no default, a client on the shared URL that matches no rule is refused.'}
+              : 'With no default, a client on the shared URL that matches no rule connects but waits, with no tools, until you assign it a profile under Connected clients.'}
           </FieldDescription>
         </Field>
         {save.error ? <ErrorAlert error={save.error} /> : null}

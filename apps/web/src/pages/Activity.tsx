@@ -615,10 +615,10 @@ function LiveTable() {
                     <button
                       type="button"
                       className="rounded-sm hover:text-primary hover:underline"
-                      onClick={() => setFilter('profile', e.profile)}
-                      title={`Show only ${e.profile}`}
+                      onClick={() => setFilter('profile', e.profile ?? '')}
+                      title={e.profile ? `Show only ${e.profile}` : 'No profile assigned'}
                     >
-                      {e.profile}
+                      {e.profile ?? <span className="text-muted-foreground">waiting</span>}
                     </button>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{e.tool}</TableCell>

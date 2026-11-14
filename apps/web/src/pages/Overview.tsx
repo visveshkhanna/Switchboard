@@ -12,6 +12,7 @@ import {
   UrlField,
 } from '@/components/common'
 import { SetupWithAI } from '@/components/SetupWithAI'
+import { WaitingBanners } from '@/components/seen-clients'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -48,6 +49,7 @@ const VIA: Record<string, string> = {
   header: 'header',
   'client-rule': 'client rule',
   default: 'default profile',
+  unassigned: 'waiting for a profile',
 }
 
 export function viaLabel(via: string): string {
@@ -99,6 +101,8 @@ export function OverviewPage() {
         <ErrorAlert error={status.error} title="Could not reach the daemon" />
       ) : (
         <>
+          <WaitingBanners />
+
           <GetStarted />
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -183,15 +187,25 @@ export function OverviewPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Link to={`/profiles/${x.profile}`} className="text-primary hover:underline">
-                            {x.profile}
-                          </Link>
+                          {x.profile ? (
+                            <Link to={`/profiles/${x.profile}`} className="text-primary hover:underline">
+                              {x.profile}
+                            </Link>
+                          ) : (
+                            <Link to="/clients#connected" className="text-muted-foreground hover:underline">
+                              waiting
+                            </Link>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary">{viaLabel(x.via)}</Badge>
                         </TableCell>
                         <TableCell>
-                          <InlineCode>{x.surface}</InlineCode>
+                          {x.surface ? (
+                            <InlineCode>{x.surface}</InlineCode>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{relativeTime(x.createdAt)}</TableCell>
                         <TableCell className="text-muted-foreground">{relativeTime(x.lastSeenAt)}</TableCell>
@@ -489,7 +503,7 @@ function ConnectAnything({ port }: { port?: number }) {
                 (now <InlineCode>{defaultProfile}</InlineCode>).
               </>
             ) : (
-              ' (none set, so unmatched clients are refused).'
+              ' (none set, so unmatched clients wait until you assign them a profile).'
             )}
           </p>
           <Snippet title="mcp.json · shared endpoint" code={configSnippet('cursor', port, null)} />
