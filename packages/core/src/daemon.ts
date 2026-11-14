@@ -1,16 +1,20 @@
 import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
+import { homedir } from 'node:os'
 import { type ServerType, serve } from '@hono/node-server'
 import { brand } from '@switchboard/shared'
 import { Hono } from 'hono'
 import { AuditLog } from './audit.ts'
 import { Catalog } from './catalog.ts'
+import type { ClientEnv } from './clients/registry.ts'
 import { ConfigStore } from './config/store.ts'
 import { writeFileAtomic, writeJson } from './fs.ts'
 import { Gateway } from './gateway.ts'
+import { adminApi } from './http/api.ts'
 import { loopbackGuard } from './http/guard.ts'
 import { mcpHandler } from './http/mcp.ts'
+import { webUi } from './http/web.ts'
 import { createLogger, type Logger } from './logger.ts'
 import { type Paths, resolvePaths } from './paths.ts'
 import { ProfileViews } from './profiles/view.ts'
@@ -36,6 +40,10 @@ export interface DaemonOptions {
   extend?: (app: Hono, daemon: Daemon) => void
   /** Start servers without a cached catalog in the background at boot. */
   warmCatalog?: boolean
+  /** Built web UI to serve at /. */
+  webRoot?: string
+  /** Where AI client config files are looked for (tests point this at a temp dir). */
+  clientEnv?: ClientEnv
 }
 
 export interface DaemonInfo {
@@ -112,6 +120,12 @@ export class Daemon {
     return this.options.version ?? '0.0.0'
   }
 
+  get clientEnv(): ClientEnv {
+    return (
+      this.options.clientEnv ?? { home: homedir(), platform: process.platform, appData: process.env.APPDATA }
+    )
+  }
+
   #wire(): void {
     this.config.on('change', (next) => {
       void this.upstream.apply(next).then(() => this.sessions.notifyChanges())
@@ -121,10 +135,12 @@ export class Daemon {
     const app = this.app
     app.use('*', loopbackGuard(this.options.allowedHosts))
     app.get('/healthz', (c) => c.json({ ok: true, name: brand.name, version: this.version }))
+    app.route('/api', adminApi(this))
     this.options.extend?.(app, this)
     const handler = mcpHandler({ sessions: this.sessions, config: () => this.config.config, log: this.log })
     app.all('/p/:profile/mcp', handler)
     app.all('/mcp', handler)
+    if (this.options.webRoot) app.route('/', webUi(this.options.webRoot, this.adminToken))
   }
 
   async listen(): Promise<DaemonInfo> {
