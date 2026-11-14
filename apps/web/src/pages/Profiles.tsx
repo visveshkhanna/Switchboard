@@ -1,35 +1,56 @@
-import { brand, type Profile, profileSchema, type Surface, slugSchema } from '@switchboard/shared'
+import { type Profile, profileSchema, type Surface, slugSchema } from '@switchboard/shared'
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { LayersIcon, PlusIcon, ServerIcon, XIcon } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
-import { del, enc, get, post, put } from '../lib/api.ts'
-import { candidateServers, PATTERN_RE, setTool, toolState } from '../lib/profileTools.ts'
-import { keys, useConfig, useServers, useStatus } from '../lib/queries.ts'
-import { Link, navigate } from '../lib/router.tsx'
-import type { Preview, ToolDef } from '../lib/types.ts'
+import { toast } from 'sonner'
+import { ConfirmButton, ErrorAlert, InlineCode, LoadingState, Page, UrlField } from '@/components/common'
+import { ServerState } from '@/components/server-status'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
-  Badge,
-  Button,
   Card,
-  ConfirmButton,
-  CopyButton,
-  cx,
-  EmptyState,
-  ErrorBox,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
+import {
   Field,
-  InlineCode,
-  inputClass,
-  Loading,
-  monoInputClass,
-  PageHeader,
-  Spinner,
-  Switch,
-  useToast,
-} from '../lib/ui.tsx'
-import { StateBadge } from './Servers.tsx'
-
-export function endpointUrl(port: number | undefined, profile: string): string {
-  return `http://127.0.0.1:${port ?? brand.defaultPort}/p/${profile}/mcp`
-}
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+  FieldTitle,
+} from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Progress } from '@/components/ui/progress'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Separator } from '@/components/ui/separator'
+import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
+import { del, enc, get, post, put } from '@/lib/api'
+import { candidateServers, PATTERN_RE, setTool, toolState } from '@/lib/profileTools'
+import { keys, useConfig, useServers, useStatus } from '@/lib/queries'
+import { Link, navigate } from '@/lib/router'
+import { profileUrl } from '@/lib/snippets'
+import type { Preview, ToolDef } from '@/lib/types'
+import { cn } from '@/lib/utils'
 
 const SURFACES: { value: Surface; title: string; body: string }[] = [
   {
@@ -57,68 +78,76 @@ const SURFACES: { value: Surface; title: string; body: string }[] = [
 export function ProfilesPage() {
   const config = useConfig()
   const status = useStatus()
-  if (config.isPending) return <Loading />
-  if (config.error) return <ErrorBox error={config.error} />
-  const profiles = Object.entries(config.data.profiles)
+  const newButton = (
+    <Button onClick={() => navigate('/profiles/new')}>
+      <PlusIcon data-icon="inline-start" />
+      New profile
+    </Button>
+  )
   return (
-    <>
-      <PageHeader
-        title="Profiles"
-        description="A profile is a set of servers and tools served at its own endpoint. Point each client at the profile it should see."
-        actions={
-          <Button variant="primary" onClick={() => navigate('/profiles/new')}>
-            New profile
-          </Button>
-        }
-      />
-      {!profiles.length ? (
-        <EmptyState
-          title="No profiles yet"
-          action={
-            <Button variant="primary" onClick={() => navigate('/profiles/new')}>
-              Create a profile
-            </Button>
-          }
-        >
-          {Object.keys(config.data.servers).length
-            ? 'Create one, such as "personal" or "work", and pick the servers it includes.'
-            : 'Add or import a few servers first, then group them into a profile.'}
-        </EmptyState>
+    <Page
+      title="Profiles"
+      description="A profile is a set of servers and tools served at its own URL. Point each client at the profile it should see."
+      actions={newButton}
+    >
+      {config.isPending ? (
+        <LoadingState />
+      ) : config.error ? (
+        <ErrorAlert error={config.error} />
+      ) : !Object.keys(config.data.profiles).length ? (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <LayersIcon />
+            </EmptyMedia>
+            <EmptyTitle>No profiles yet</EmptyTitle>
+            <EmptyDescription>
+              {Object.keys(config.data.servers).length
+                ? 'Create one, such as "personal" or "work", and pick the servers it includes.'
+                : 'Add or import a few servers first, then group them into a profile.'}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>{newButton}</EmptyContent>
+        </Empty>
       ) : (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {profiles.map(([name, p]) => {
-            const url = endpointUrl(status.data?.port, name)
-            return (
-              <div key={name} className="rounded-lg border border-line bg-panel p-4 shadow-xs">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <Link to={`/profiles/${name}`} className="text-[15px] font-semibold hover:text-accent">
-                      {name}
-                    </Link>
-                    {config.data.defaultProfile === name && (
-                      <span className="ml-2">
-                        <Badge tone="accent">default</Badge>
-                      </span>
-                    )}
-                    {p.description && <p className="mt-0.5 text-sm text-muted">{p.description}</p>}
-                  </div>
-                  <Badge>{p.surface}</Badge>
-                </div>
-                <p className="mt-3 text-xs text-muted">
-                  {p.servers.length ? p.servers.join(', ') : 'no servers'}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {Object.entries(config.data.profiles).map(([name, p]) => (
+            <Card key={name}>
+              <CardHeader>
+                <CardTitle className="flex flex-wrap items-center gap-2">
+                  <Link to={`/profiles/${name}`} className="hover:underline">
+                    {name}
+                  </Link>
+                  {config.data.defaultProfile === name && <Badge variant="secondary">default</Badge>}
+                </CardTitle>
+                <CardDescription>{p.description || 'No description'}</CardDescription>
+                <CardAction>
+                  <Badge variant="outline">{p.surface}</Badge>
+                </CardAction>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {p.servers.length ? p.servers.join(', ') : 'No servers'}
                   {p.include.length > 0 && ` · +${p.include.length} included`}
                   {p.exclude.length > 0 && ` · −${p.exclude.length} excluded`}
                 </p>
-                <div className="mt-3 flex items-center justify-between gap-2 rounded-md bg-subtle py-0.5 pr-0.5 pl-2.5">
-                  <code className="truncate font-mono text-xs">{url}</code>
-                  <CopyButton text={url} />
-                </div>
-              </div>
-            )
-          })}
+                <UrlField url={profileUrl(status.data?.port, name)} label={`${name} URL`} />
+              </CardContent>
+              <CardFooter className="justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  render={<Link to={`/profiles/${name}`} />}
+                  nativeButton={false}
+                >
+                  Edit
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
         </div>
       )}
-    </>
+    </Page>
   )
 }
 
@@ -133,17 +162,28 @@ function useDebounced<T>(value: T, ms: number): T {
 
 export function ProfileEditor({ name }: { name?: string }) {
   const config = useConfig()
-  if (config.isPending) return <Loading />
-  if (config.error) return <ErrorBox error={config.error} />
+  if (config.isPending || config.error)
+    return (
+      <Page title={name ?? 'New profile'} back={<Link to="/profiles">← Profiles</Link>}>
+        {config.error ? <ErrorAlert error={config.error} /> : <LoadingState />}
+      </Page>
+    )
   const saved = name ? config.data.profiles[name] : undefined
   if (name && !saved)
     return (
-      <EmptyState
-        title={`No profile named "${name}"`}
-        action={<Button onClick={() => navigate('/profiles')}>All profiles</Button>}
-      >
-        It may have been deleted.
-      </EmptyState>
+      <Page title={name} back={<Link to="/profiles">← Profiles</Link>}>
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>No profile named “{name}”</EmptyTitle>
+            <EmptyDescription>It may have been deleted.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" onClick={() => navigate('/profiles')}>
+              All profiles
+            </Button>
+          </EmptyContent>
+        </Empty>
+      </Page>
     )
   return (
     <Editor
@@ -162,7 +202,6 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
   const status = useStatus()
   const servers = useServers()
   const qc = useQueryClient()
-  const toast = useToast()
   const set = (patch: Partial<Profile>) => setDraft((d) => ({ ...d, ...patch }))
 
   const profileName = name ?? newName
@@ -191,10 +230,15 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.config })
       void qc.invalidateQueries({ queryKey: keys.status })
-      toast(`Saved ${profileName}`, 'ok')
+      toast.success(`Saved ${profileName}`)
       if (isNew) navigate(`/profiles/${profileName}`, { replace: true })
     },
   })
+  const submit = () => {
+    setTouched(true)
+    if (isNew && !nameCheck.success) return
+    save.mutate()
+  }
 
   const candidates = candidateServers(draft, serverNames)
   const toolQueries = useQueries({
@@ -210,149 +254,168 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
   }, [preview.dataUpdatedAt])
 
   const exposed = new Map(preview.data?.tools.map((t) => [t.id, t.name]))
-  const url = endpointUrl(status.data?.port, profileName || '<name>')
+  const url = profileUrl(status.data?.port, profileName || '<name>')
 
   return (
-    <>
-      <PageHeader
-        back={<Link to="/profiles">← Profiles</Link>}
-        title={isNew ? 'New profile' : name}
-        description={
-          isNew ? 'Choose servers and tools, then save to get an endpoint.' : saved.description || undefined
-        }
-        actions={
-          <>
-            {!isNew && (
-              <ConfirmButton
-                title={`Delete profile "${name}"?`}
-                body="Clients using its endpoint stop working, and client rules pointing at it are removed. Servers are kept."
-                onConfirm={async () => {
-                  await del(`/profiles/${enc(name)}`)
-                  void qc.invalidateQueries({ queryKey: keys.config })
-                  toast(`Deleted ${name}`)
-                  navigate('/profiles')
-                }}
-              >
-                Delete
-              </ConfirmButton>
+    <Page
+      back={<Link to="/profiles">← Profiles</Link>}
+      title={isNew ? 'New profile' : name}
+      description={
+        isNew
+          ? 'Choose servers and tools, then create the profile to get its URL.'
+          : saved.description || undefined
+      }
+      actions={
+        !isNew && (
+          <ConfirmButton
+            title={`Delete profile “${name}”?`}
+            description="Clients using its URL stop working, and client rules pointing at it are removed. Servers are kept."
+            onConfirm={async () => {
+              await del(`/profiles/${enc(name)}`)
+              void qc.invalidateQueries({ queryKey: keys.config })
+              toast(`Deleted ${name}`)
+              navigate('/profiles')
+            }}
+          >
+            Delete
+          </ConfirmButton>
+        )
+      }
+      footer={
+        <>
+          <span className="text-sm text-muted-foreground" aria-live="polite">
+            {isNew ? (
+              'Not created yet'
+            ) : dirty ? (
+              <Badge variant="secondary">Unsaved changes</Badge>
+            ) : (
+              'All changes saved'
             )}
-            {!isNew && dirty && <Button onClick={() => setDraft(saved)}>Discard changes</Button>}
-            <Button
-              variant="primary"
-              disabled={!dirty}
-              loading={save.isPending}
-              onClick={() => {
-                setTouched(true)
-                if (isNew && !nameCheck.success) return
-                save.mutate()
-              }}
-            >
+          </span>
+          <div className="flex items-center gap-2">
+            {!isNew && dirty && (
+              <Button variant="outline" onClick={() => setDraft(saved)}>
+                Discard
+              </Button>
+            )}
+            <Button disabled={!dirty || save.isPending} onClick={submit}>
+              {save.isPending && <Spinner data-icon="inline-start" />}
               {isNew ? 'Create profile' : 'Save'}
             </Button>
-          </>
-        }
-      />
-      {save.error && (
-        <div className="mb-4">
-          <ErrorBox error={save.error} title="Could not save the profile" />
-        </div>
-      )}
+          </div>
+        </>
+      }
+    >
+      {save.error ? <ErrorAlert error={save.error} title="Could not save the profile" /> : null}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0 space-y-5">
-          <Card title="General">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {isNew && (
-                <Field label="Name" error={nameError} hint="Lowercase, used in the endpoint URL.">
-                  {(id, d) => (
-                    <input
-                      id={id}
-                      aria-describedby={d}
-                      aria-invalid={!!nameError}
-                      className={monoInputClass}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>General</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FieldGroup className="grid gap-4 md:grid-cols-2">
+                {isNew && (
+                  <Field data-invalid={!!nameError || undefined}>
+                    <FieldLabel htmlFor="profile-name">Name</FieldLabel>
+                    <Input
+                      id="profile-name"
+                      aria-invalid={!!nameError || undefined}
+                      className="font-mono"
                       value={newName}
                       placeholder="work"
                       autoComplete="off"
                       onChange={(e) => setNewName(e.target.value)}
                     />
-                  )}
-                </Field>
-              )}
-              <Field label="Description" className={isNew ? '' : 'md:col-span-2'}>
-                {(id) => (
-                  <input
-                    id={id}
-                    className={inputClass}
+                    {nameError ? (
+                      <FieldError>{nameError}</FieldError>
+                    ) : (
+                      <FieldDescription>Lowercase, used in the URL.</FieldDescription>
+                    )}
+                  </Field>
+                )}
+                <Field className={cn(!isNew && 'md:col-span-2')}>
+                  <FieldLabel htmlFor="profile-description">Description</FieldLabel>
+                  <Input
+                    id="profile-description"
                     value={draft.description ?? ''}
                     placeholder="Tools for client work"
                     onChange={(e) => set({ description: e.target.value || undefined })}
                   />
-                )}
-              </Field>
-              <div className="md:col-span-2">
-                <p className="mb-1 text-xs font-medium">Endpoint</p>
-                <div className="flex items-center justify-between gap-2 rounded-md border border-line bg-subtle py-0.5 pr-0.5 pl-2.5">
-                  <code className="truncate font-mono text-xs">{url}</code>
-                  {!isNew && <CopyButton text={url} />}
-                </div>
-                <p className="mt-1 text-xs text-muted">
-                  {isNew ? 'Available once the profile is saved. ' : ''}
-                  <Link to="/clients" className="text-accent hover:underline">
-                    Connect a client
-                  </Link>{' '}
-                  to write it into its config.
-                </p>
-              </div>
-            </div>
+                </Field>
+                <Field className="md:col-span-2">
+                  <FieldLabel htmlFor="profile-url">URL</FieldLabel>
+                  {isNew ? (
+                    <Input id="profile-url" readOnly value={url} className="font-mono text-xs" />
+                  ) : (
+                    <UrlField url={url} label="Profile URL" />
+                  )}
+                  <FieldDescription>
+                    {isNew ? 'Available once the profile is created. ' : ''}
+                    <Link to="/clients">Connect a client</Link> to write it into its config.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            </CardContent>
           </Card>
 
-          <Card
-            title="Servers"
-            description="Every tool of a checked server is included, minus exclusions below."
-          >
-            {!serverNames.length ? (
-              <EmptyState
-                title="No servers to choose from"
-                action={
-                  <Button size="sm" onClick={() => navigate('/import')}>
-                    Import servers
-                  </Button>
-                }
-              >
-                Add or import servers first.
-              </EmptyState>
-            ) : (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {serverNames.map((s) => {
-                  const row = servers.data?.find((r) => r.name === s)
-                  const checked = draft.servers.includes(s)
-                  return (
-                    <label
-                      key={s}
-                      className={cx(
-                        'flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-sm',
-                        checked ? 'border-accent/50 bg-accent/5' : 'border-line hover:bg-subtle',
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        className="size-4 accent-[var(--sb-accent)]"
-                        checked={checked}
-                        onChange={(e) =>
-                          set({
-                            servers: e.target.checked
-                              ? [...draft.servers, s]
-                              : draft.servers.filter((x) => x !== s),
-                          })
-                        }
-                      />
-                      <span className="min-w-0 flex-1 truncate font-medium">{s}</span>
-                      {row && <StateBadge status={row.status} enabled={row.config.enabled} />}
-                    </label>
-                  )
-                })}
-              </div>
-            )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Servers</CardTitle>
+              <CardDescription>
+                Every tool of a checked server is included, minus exclusions below.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!serverNames.length ? (
+                <Empty className="border">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <ServerIcon />
+                    </EmptyMedia>
+                    <EmptyTitle>No servers to choose from</EmptyTitle>
+                    <EmptyDescription>Add or import servers first.</EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button variant="outline" size="sm" onClick={() => navigate('/import')}>
+                      Import servers
+                    </Button>
+                  </EmptyContent>
+                </Empty>
+              ) : (
+                <FieldSet>
+                  <FieldLegend className="sr-only">Servers in this profile</FieldLegend>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {serverNames.map((s) => {
+                      const row = servers.data?.find((r) => r.name === s)
+                      const id = `server-${s}`
+                      return (
+                        <FieldLabel key={s} htmlFor={id}>
+                          <Field orientation="horizontal">
+                            <Checkbox
+                              id={id}
+                              checked={draft.servers.includes(s)}
+                              onCheckedChange={(checked) =>
+                                set({
+                                  servers: checked
+                                    ? [...draft.servers, s]
+                                    : draft.servers.filter((x) => x !== s),
+                                })
+                              }
+                            />
+                            <FieldContent className="min-w-0">
+                              <FieldTitle className="truncate">{s}</FieldTitle>
+                              {row && <ServerState status={row.status} enabled={row.config.enabled} />}
+                            </FieldContent>
+                          </Field>
+                        </FieldLabel>
+                      )
+                    })}
+                  </div>
+                </FieldSet>
+              )}
+            </CardContent>
           </Card>
 
           <ToolsCard
@@ -363,39 +426,42 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
             exposed={exposed}
           />
 
-          <Card
-            title="Patterns"
-            description={
-              <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Patterns</CardTitle>
+              <CardDescription>
                 <InlineCode>server.tool</InlineCode>, <InlineCode>server.*</InlineCode> or globs like{' '}
                 <InlineCode>git*.list_*</InlineCode>. Exclusions are applied last and always win.
-              </>
-            }
-          >
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              <PatternList
-                label="Include"
-                hint="Extra tools from servers not checked above."
-                values={draft.include}
-                onChange={(include) => set({ include })}
-              />
-              <PatternList
-                label="Exclude"
-                hint="Tools removed from this profile."
-                values={draft.exclude}
-                onChange={(exclude) => set({ exclude })}
-              />
-            </div>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <PatternList
+                  id="include"
+                  label="Include"
+                  hint="Extra tools from servers not checked above."
+                  values={draft.include}
+                  onChange={(include) => set({ include })}
+                />
+                <PatternList
+                  id="exclude"
+                  label="Exclude"
+                  hint="Tools removed from this profile."
+                  values={draft.exclude}
+                  onChange={(exclude) => set({ exclude })}
+                />
+              </div>
+            </CardContent>
           </Card>
 
           <SurfaceCard draft={draft} set={set} />
         </div>
 
-        <aside className="lg:sticky lg:top-6 lg:self-start">
+        <aside className="lg:sticky lg:top-20 lg:max-h-[calc(100svh-9rem)] lg:self-start lg:overflow-y-auto">
           <PreviewPanel preview={preview.data} error={preview.error} fetching={preview.isFetching} />
         </aside>
       </div>
-    </>
+    </Page>
   )
 }
 
@@ -433,110 +499,121 @@ function ToolsCard({
   const f = filter.trim().toLowerCase()
 
   return (
-    <Card
-      title="Tools"
-      description="Switch single tools on or off; this edits the include and exclude lists for you."
-      actions={
-        candidates.length > 0 && (
-          <input
-            aria-label="Filter tools"
-            placeholder="Filter…"
-            className={`${inputClass} h-7 w-40 py-0.5 text-xs`}
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-        )
-      }
-      bodyClassName="divide-y divide-line"
-    >
-      {!candidates.length && (
-        <p className="px-4 py-6 text-center text-sm text-muted">Check a server above to see its tools.</p>
-      )}
-      {candidates.map((server) => {
-        const q = tools[server]
-        const list = (q?.data ?? []).filter(
-          (t) => !f || t.name.toLowerCase().includes(f) || t.description?.toLowerCase().includes(f),
-        )
-        const states = (q?.data ?? []).map((t) => toolState(draft, server, t.name))
-        const on = states.filter((s) => s.active).length
-        return (
-          <div key={server}>
-            <div className="flex items-center justify-between bg-subtle/60 px-4 py-1.5">
-              <span className="text-xs font-semibold">{server}</span>
-              <span className="text-xs text-muted">{q?.data ? `${on} of ${q.data.length} on` : ''}</span>
-            </div>
-            {q?.isPending ? (
-              <div className="px-4 py-3 text-xs text-muted">
-                <Spinner className="mr-1 inline" /> Loading tools…
+    <Card>
+      <CardHeader>
+        <CardTitle>Tools</CardTitle>
+        <CardDescription>
+          Switch single tools on or off; this edits the include and exclude lists for you.
+        </CardDescription>
+        {candidates.length > 0 && (
+          <CardAction>
+            <Input
+              aria-label="Filter tools"
+              placeholder="Filter…"
+              className="h-7 w-40"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </CardAction>
+        )}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {!candidates.length && (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Check a server above to see its tools.
+          </p>
+        )}
+        {candidates.map((server) => {
+          const q = tools[server]
+          const list = (q?.data ?? []).filter(
+            (t) => !f || t.name.toLowerCase().includes(f) || t.description?.toLowerCase().includes(f),
+          )
+          const on = (q?.data ?? []).filter((t) => toolState(draft, server, t.name).active).length
+          return (
+            <section
+              key={server}
+              aria-label={`${server} tools`}
+              className="overflow-hidden rounded-lg border"
+            >
+              <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5">
+                <span className="text-xs font-semibold">{server}</span>
+                <span className="text-xs text-muted-foreground">
+                  {q?.data ? `${on} of ${q.data.length} on` : ''}
+                </span>
               </div>
-            ) : !q?.data?.length ? (
-              <p className="px-4 py-3 text-xs text-muted">
-                No tools cached yet. They load when the server first starts;{' '}
-                <Link to={`/servers/${server}`} className="text-accent hover:underline">
-                  test {server}
-                </Link>{' '}
-                to load them now.
-              </p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {list.map((t) => {
-                  const id = `${server}.${t.name}`
-                  const st = toolState(draft, server, t.name)
-                  const override = draft.overrides[id]
-                  const blocked = !st.active && st.blockedBy.length > 0
-                  return (
-                    <li key={id} className="px-4 py-2">
-                      <div className="flex items-start gap-3">
-                        <div className="pt-0.5">
+              {q?.isPending ? (
+                <p className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
+                  <Spinner /> Loading tools…
+                </p>
+              ) : !q?.data?.length ? (
+                <p className="px-3 py-3 text-xs text-muted-foreground">
+                  No tools yet. They are discovered when the server starts;{' '}
+                  <Link to={`/servers/${server}`} className="underline underline-offset-4">
+                    open {server}
+                  </Link>{' '}
+                  to check it.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {list.map((t) => {
+                    const id = `${server}.${t.name}`
+                    const st = toolState(draft, server, t.name)
+                    const override = draft.overrides[id]
+                    const blocked = !st.active && st.blockedBy.length > 0
+                    return (
+                      <li key={id} className="px-3 py-2">
+                        <div className="flex items-start gap-3">
                           <Switch
                             size="sm"
+                            className="mt-1"
                             checked={st.active}
                             disabled={blocked}
-                            label={
+                            aria-label={
                               blocked ? `${id} is excluded by ${st.blockedBy.join(', ')}` : `Include ${id}`
                             }
-                            onChange={(next) => setDraft((p) => setTool(p, server, t.name, next))}
+                            onCheckedChange={(next) => setDraft((p) => setTool(p, server, t.name, next))}
                           />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-baseline gap-x-2">
-                            <code className={cx('font-mono text-[13px]', !st.active && 'text-faint')}>
-                              {t.name}
-                            </code>
-                            {st.active && exposed.get(id) && (
-                              <span className="font-mono text-[11px] text-faint">as {exposed.get(id)}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                              <code
+                                className={cn('font-mono text-sm', !st.active && 'text-muted-foreground')}
+                              >
+                                {t.name}
+                              </code>
+                              {st.active && exposed.get(id) && (
+                                <span className="font-mono text-xs text-muted-foreground">
+                                  as {exposed.get(id)}
+                                </span>
+                              )}
+                              {override && (override.name || override.description) && (
+                                <Badge variant="secondary">edited</Badge>
+                              )}
+                              {blocked && (
+                                <Badge variant="outline">excluded by {st.blockedBy.join(', ')}</Badge>
+                              )}
+                            </div>
+                            {t.description && (
+                              <p className="line-clamp-1 text-xs text-muted-foreground" title={t.description}>
+                                {override?.description || t.description}
+                              </p>
                             )}
-                            {override && (override.name || override.description) && (
-                              <Badge tone="accent">edited</Badge>
-                            )}
-                            {blocked && <Badge tone="warn">excluded by {st.blockedBy.join(', ')}</Badge>}
                           </div>
-                          {t.description && (
-                            <p className="line-clamp-1 text-xs text-muted" title={t.description}>
-                              {override?.description || t.description}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          aria-expanded={editing === id}
-                          onClick={() => setEditing(editing === id ? undefined : id)}
-                        >
-                          {editing === id ? 'Done' : 'Customize'}
-                        </Button>
-                      </div>
-                      {editing === id && (
-                        <div className="mt-2 grid grid-cols-1 gap-3 rounded-md bg-subtle p-3 md:grid-cols-2">
-                          <Field
-                            label="Name shown to clients"
-                            hint={`Default: ${exposed.get(id) ?? `${server}__${t.name}`}`}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-expanded={editing === id}
+                            onClick={() => setEditing(editing === id ? undefined : id)}
                           >
-                            {(fid, d) => (
-                              <input
-                                id={fid}
-                                aria-describedby={d}
-                                className={monoInputClass}
+                            {editing === id ? 'Done' : 'Customize'}
+                          </Button>
+                        </div>
+                        {editing === id && (
+                          <FieldGroup className="mt-2 grid gap-3 rounded-lg bg-muted/50 p-3 md:grid-cols-2">
+                            <Field>
+                              <FieldLabel htmlFor={`${id}-name`}>Name shown to clients</FieldLabel>
+                              <Input
+                                id={`${id}-name`}
+                                className="font-mono"
                                 value={override?.name ?? ''}
                                 onChange={(e) =>
                                   setDraft((p) => ({
@@ -548,15 +625,15 @@ function ToolsCard({
                                   }))
                                 }
                               />
-                            )}
-                          </Field>
-                          <Field label="Description" hint="Leave empty to keep the server's.">
-                            {(fid, d) => (
-                              <textarea
-                                id={fid}
-                                aria-describedby={d}
+                              <FieldDescription>
+                                Default: {exposed.get(id) ?? `${server}__${t.name}`}
+                              </FieldDescription>
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor={`${id}-description`}>Description</FieldLabel>
+                              <Textarea
+                                id={`${id}-description`}
                                 rows={2}
-                                className={inputClass}
                                 value={override?.description ?? ''}
                                 placeholder={t.description}
                                 onChange={(e) =>
@@ -569,29 +646,34 @@ function ToolsCard({
                                   }))
                                 }
                               />
-                            )}
-                          </Field>
-                        </div>
-                      )}
-                    </li>
-                  )
-                })}
-                {!list.length && <li className="px-4 py-2 text-xs text-muted">No tools match “{filter}”.</li>}
-              </ul>
-            )}
-          </div>
-        )
-      })}
+                              <FieldDescription>Leave empty to keep the server's.</FieldDescription>
+                            </Field>
+                          </FieldGroup>
+                        )}
+                      </li>
+                    )
+                  })}
+                  {!list.length && (
+                    <li className="px-3 py-2 text-xs text-muted-foreground">No tools match “{filter}”.</li>
+                  )}
+                </ul>
+              )}
+            </section>
+          )
+        })}
+      </CardContent>
     </Card>
   )
 }
 
 function PatternList({
+  id,
   label,
   hint,
   values,
   onChange,
 }: {
+  id: string
   label: string
   hint: string
   values: string[]
@@ -609,60 +691,60 @@ function PatternList({
     setError(undefined)
   }
   return (
-    <div>
-      <Field label={label} hint={hint} error={error}>
-        {(id, d) => (
-          <div className="flex gap-1.5">
-            <input
-              id={id}
-              aria-describedby={d}
-              aria-invalid={!!error}
-              className={monoInputClass}
-              value={text}
-              placeholder="github.delete_*"
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  add()
-                }
-              }}
-            />
-            <Button onClick={add}>Add</Button>
-          </div>
-        )}
-      </Field>
+    <Field data-invalid={!!error || undefined}>
+      <FieldLabel htmlFor={`pattern-${id}`}>{label}</FieldLabel>
+      <div className="flex gap-2">
+        <Input
+          id={`pattern-${id}`}
+          aria-invalid={!!error || undefined}
+          className="font-mono"
+          value={text}
+          placeholder="github.delete_*"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              add()
+            }
+          }}
+        />
+        <Button variant="outline" onClick={add}>
+          Add
+        </Button>
+      </div>
+      {error ? <FieldError>{error}</FieldError> : <FieldDescription>{hint}</FieldDescription>}
       {values.length > 0 && (
-        <ul className="mt-2 flex flex-wrap gap-1.5">
+        <ul className="flex flex-wrap gap-1.5">
           {values.map((v) => (
-            <li
-              key={v}
-              className="inline-flex items-center gap-1 rounded border border-line bg-subtle py-0.5 pr-0.5 pl-2 font-mono text-xs"
-            >
-              {v}
-              <button
-                type="button"
-                aria-label={`Remove ${v}`}
-                className="rounded px-1 text-muted hover:bg-line hover:text-fg"
-                onClick={() => onChange(values.filter((x) => x !== v))}
-              >
-                ✕
-              </button>
+            <li key={v}>
+              <Badge variant="secondary" className="font-mono">
+                {v}
+                <button
+                  type="button"
+                  aria-label={`Remove ${v}`}
+                  className="rounded-sm hover:text-foreground"
+                  onClick={() => onChange(values.filter((x) => x !== v))}
+                >
+                  <XIcon />
+                </button>
+              </Badge>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </Field>
   )
 }
 
 function NumberField({
+  id,
   label,
   hint,
   value,
   onChange,
   min,
 }: {
+  id: string
   label: string
   hint?: ReactNode
   value: number
@@ -670,18 +752,16 @@ function NumberField({
   min?: number
 }) {
   return (
-    <Field label={label} hint={hint}>
-      {(id, d) => (
-        <input
-          id={id}
-          aria-describedby={d}
-          type="number"
-          min={min}
-          className={inputClass}
-          value={Number.isFinite(value) ? value : ''}
-          onChange={(e) => onChange(e.target.value === '' ? Number.NaN : Number(e.target.value))}
-        />
-      )}
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        id={id}
+        type="number"
+        min={min}
+        value={Number.isFinite(value) ? value : ''}
+        onChange={(e) => onChange(e.target.value === '' ? Number.NaN : Number(e.target.value))}
+      />
+      {hint && <FieldDescription>{hint}</FieldDescription>}
     </Field>
   )
 }
@@ -690,82 +770,87 @@ function SurfaceCard({ draft, set }: { draft: Profile; set: (p: Partial<Profile>
   const b = draft.budgets
   const setBudget = (patch: Partial<Profile['budgets']>) => set({ budgets: { ...b, ...patch } })
   return (
-    <Card title="Tool surface" description="How this profile's tools are presented to clients.">
-      <fieldset>
-        <legend className="sr-only">Surface</legend>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {SURFACES.map((s) => (
-            <label
-              key={s.value}
-              className={cx(
-                'flex cursor-pointer gap-2.5 rounded-md border px-3 py-2.5',
-                draft.surface === s.value ? 'border-accent/60 bg-accent/5' : 'border-line hover:bg-subtle',
-              )}
-            >
-              <input
-                type="radio"
-                name="surface"
-                value={s.value}
-                className="mt-0.5 accent-[var(--sb-accent)]"
-                checked={draft.surface === s.value}
-                onChange={() => set({ surface: s.value })}
-              />
-              <span>
-                <span className="block text-sm font-medium">{s.title}</span>
-                <span className="block text-xs text-muted">{s.body}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      {draft.surface === 'auto' && (
-        <div className="mt-4 max-w-xs">
-          <NumberField
-            label="Auto threshold"
-            hint="Switch to meta-tools when the profile has more tools than this."
-            min={0}
-            value={draft.autoThreshold}
-            onChange={(autoThreshold) => set({ autoThreshold })}
-          />
-        </div>
-      )}
-      {draft.surface === 'code' && (
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-medium">Sandbox budgets, per execute call</p>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+    <Card>
+      <CardHeader>
+        <CardTitle>Tool surface</CardTitle>
+        <CardDescription>How this profile's tools are presented to clients.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        <FieldSet>
+          <FieldLegend className="sr-only">Surface</FieldLegend>
+          <RadioGroup
+            value={draft.surface}
+            onValueChange={(v) => set({ surface: v as Surface })}
+            className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+          >
+            {SURFACES.map((s) => (
+              <FieldLabel key={s.value} htmlFor={`surface-${s.value}`}>
+                <Field orientation="horizontal">
+                  <RadioGroupItem id={`surface-${s.value}`} value={s.value} />
+                  <FieldContent>
+                    <FieldTitle>{s.title}</FieldTitle>
+                    <FieldDescription>{s.body}</FieldDescription>
+                  </FieldContent>
+                </Field>
+              </FieldLabel>
+            ))}
+          </RadioGroup>
+        </FieldSet>
+        {draft.surface === 'auto' && (
+          <div className="max-w-xs">
             <NumberField
-              label="Timeout (ms)"
-              min={100}
-              value={b.timeoutMs}
-              onChange={(timeoutMs) => setBudget({ timeoutMs })}
-            />
-            <NumberField
-              label="Max tool calls"
-              min={1}
-              value={b.maxToolCalls}
-              onChange={(maxToolCalls) => setBudget({ maxToolCalls })}
-            />
-            <NumberField
-              label="Memory (MB)"
-              min={8}
-              value={b.memoryMb}
-              onChange={(memoryMb) => setBudget({ memoryMb })}
-            />
-            <NumberField
-              label="Max source (bytes)"
-              min={256}
-              value={b.maxSourceBytes}
-              onChange={(maxSourceBytes) => setBudget({ maxSourceBytes })}
-            />
-            <NumberField
-              label="Max result (chars)"
-              min={1000}
-              value={b.maxResultChars}
-              onChange={(maxResultChars) => setBudget({ maxResultChars })}
+              id="auto-threshold"
+              label="Auto threshold"
+              hint="Switch to meta-tools when the profile has more tools than this."
+              min={0}
+              value={draft.autoThreshold}
+              onChange={(autoThreshold) => set({ autoThreshold })}
             />
           </div>
-        </div>
-      )}
+        )}
+        {draft.surface === 'code' && (
+          <FieldSet>
+            <FieldLegend variant="label">Sandbox budgets, per execute call</FieldLegend>
+            <FieldGroup className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              <NumberField
+                id="budget-timeout"
+                label="Timeout (ms)"
+                min={100}
+                value={b.timeoutMs}
+                onChange={(timeoutMs) => setBudget({ timeoutMs })}
+              />
+              <NumberField
+                id="budget-calls"
+                label="Max tool calls"
+                min={1}
+                value={b.maxToolCalls}
+                onChange={(maxToolCalls) => setBudget({ maxToolCalls })}
+              />
+              <NumberField
+                id="budget-memory"
+                label="Memory (MB)"
+                min={8}
+                value={b.memoryMb}
+                onChange={(memoryMb) => setBudget({ memoryMb })}
+              />
+              <NumberField
+                id="budget-source"
+                label="Max source (bytes)"
+                min={256}
+                value={b.maxSourceBytes}
+                onChange={(maxSourceBytes) => setBudget({ maxSourceBytes })}
+              />
+              <NumberField
+                id="budget-result"
+                label="Max result (chars)"
+                min={1000}
+                value={b.maxResultChars}
+                onChange={(maxResultChars) => setBudget({ maxResultChars })}
+              />
+            </FieldGroup>
+          </FieldSet>
+        )}
+      </CardContent>
     </Card>
   )
 }
@@ -779,84 +864,86 @@ function PreviewPanel({
   error: unknown
   fetching: boolean
 }) {
-  const saving =
+  const ratio =
     preview && preview.tokens.passthrough > 0
-      ? Math.round((1 - preview.tokens.listed / preview.tokens.passthrough) * 100)
+      ? Math.min(100, (preview.tokens.listed / preview.tokens.passthrough) * 100)
       : 0
+  const saving = preview && preview.tokens.passthrough > 0 ? Math.round(100 - ratio) : 0
   return (
-    <Card
-      title={
-        <span className="flex items-center gap-2">
-          Live preview {fetching && <Spinner className="text-muted" />}
-        </span>
-      }
-      description="What a client of this profile sees, including unsaved changes."
-    >
-      {error ? (
-        <ErrorBox error={error} title="This draft is not valid" />
-      ) : !preview ? (
-        <p className="text-sm text-muted">Computing…</p>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted">Surface</span>
-            <Badge tone="accent">{preview.surface}</Badge>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-md bg-subtle px-3 py-2">
-              <div className="text-[11px] text-muted">Tools allowed</div>
-              <div className="text-lg font-semibold tabular-nums">{preview.tools.length}</div>
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Live preview {fetching && <Spinner className="text-muted-foreground" />}
+        </CardTitle>
+        <CardDescription>What a client of this profile sees, including unsaved changes.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {error ? (
+          <ErrorAlert error={error} title="This draft is not valid" />
+        ) : !preview ? (
+          <p className="text-sm text-muted-foreground">Computing…</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Surface</span>
+              <Badge>{preview.surface}</Badge>
             </div>
-            <div className="rounded-md bg-subtle px-3 py-2">
-              <div className="text-[11px] text-muted">Tools listed</div>
-              <div className="text-lg font-semibold tabular-nums">{preview.listed.length}</div>
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted">Context, as listed</span>
-              <span className="font-medium tabular-nums">
-                ~{preview.tokens.listed.toLocaleString()} tokens
-              </span>
-            </div>
-            <div className="mt-1 flex justify-between text-xs">
-              <span className="text-muted">If passed through</span>
-              <span className="tabular-nums">~{preview.tokens.passthrough.toLocaleString()} tokens</span>
-            </div>
-            {preview.tokens.passthrough > 0 && (
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-subtle" aria-hidden="true">
-                <div
-                  className="h-full rounded-full bg-accent"
-                  style={{
-                    width: `${Math.min(100, (preview.tokens.listed / preview.tokens.passthrough) * 100)}%`,
-                  }}
-                />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-muted/50 px-3 py-2">
+                <div className="text-xs text-muted-foreground">Tools allowed</div>
+                <div className="text-lg font-semibold">{preview.tools.length}</div>
               </div>
+              <div className="rounded-lg bg-muted/50 px-3 py-2">
+                <div className="text-xs text-muted-foreground">Tools listed</div>
+                <div className="text-lg font-semibold">{preview.listed.length}</div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Context, as listed</span>
+                <span className="font-medium tabular-nums">
+                  ~{preview.tokens.listed.toLocaleString()} tokens
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">If passed through</span>
+                <span className="tabular-nums">~{preview.tokens.passthrough.toLocaleString()} tokens</span>
+              </div>
+              {preview.tokens.passthrough > 0 && (
+                <Progress
+                  value={ratio}
+                  aria-label="Listed context compared with passthrough"
+                  className="mt-1"
+                />
+              )}
+              {saving > 0 && <p className="text-muted-foreground">{saving}% smaller than passthrough</p>}
+            </div>
+            {preview.missingServers.length > 0 && (
+              <Alert>
+                <AlertDescription>
+                  No tool list yet for {preview.missingServers.join(', ')}. Its tools are counted once the
+                  server has started.
+                </AlertDescription>
+              </Alert>
             )}
-            {saving > 0 && <p className="mt-1 text-xs text-ok">{saving}% smaller than passthrough</p>}
-          </div>
-          {preview.missingServers.length > 0 && (
-            <p className="rounded-md border border-warn/30 bg-warn/5 px-2.5 py-2 text-xs text-warn">
-              No tool list yet for {preview.missingServers.join(', ')}. Test the server so its tools can be
-              counted.
-            </p>
-          )}
-          <div>
-            <p className="mb-1.5 text-xs text-muted">Client sees</p>
-            {preview.listed.length ? (
-              <ul className="max-h-72 space-y-0.5 overflow-auto font-mono text-xs">
-                {preview.listed.map((n) => (
-                  <li key={n} className="truncate">
-                    {n}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-muted">No tools. Check a server or include a tool.</p>
-            )}
-          </div>
-        </div>
-      )}
+            <Separator />
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs text-muted-foreground">Client sees</p>
+              {preview.listed.length ? (
+                <ul className="flex flex-col gap-0.5 font-mono text-xs">
+                  {preview.listed.map((n) => (
+                    <li key={n} className="truncate">
+                      {n}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">No tools. Check a server or include a tool.</p>
+              )}
+            </div>
+          </>
+        )}
+      </CardContent>
     </Card>
   )
 }

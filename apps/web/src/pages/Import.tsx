@@ -1,21 +1,29 @@
 import { slugSchema } from '@switchboard/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { DownloadIcon, PackageSearchIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { post } from '../lib/api.ts'
-import { keys, useClients, useImport } from '../lib/queries.ts'
-import { Link, navigate } from '../lib/router.tsx'
-import type { ImportCandidate } from '../lib/types.ts'
+import { toast } from 'sonner'
+import { ErrorAlert, InlineCode, LoadingState, Page } from '@/components/common'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorBox,
-  Loading,
-  monoInputClass,
-  PageHeader,
-  useToast,
-} from '../lib/ui.tsx'
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
+import { post } from '@/lib/api'
+import { plural } from '@/lib/format'
+import { keys, useClients, useImport } from '@/lib/queries'
+import { Link, navigate } from '@/lib/router'
+import type { ImportCandidate } from '@/lib/types'
 
 const keyOf = (c: ImportCandidate) => `${c.client}/${c.originalName}`
 
@@ -28,7 +36,6 @@ export function ImportPage() {
   const candidates = useImport()
   const clients = useClients()
   const qc = useQueryClient()
-  const toast = useToast()
   // Per candidate: selected and the name to import as. Defaults come from the API.
   const [picked, setPicked] = useState<Record<string, boolean>>({})
   const [names, setNames] = useState<Record<string, string>>({})
@@ -58,7 +65,7 @@ export function ImportPage() {
         items: selected.map((c) => ({ name: nameOf(c), server: c.server })),
       }),
     onSuccess: (r) => {
-      toast(`Imported ${r.imported.length} server${r.imported.length === 1 ? '' : 's'}`, 'ok')
+      toast.success(`Imported ${plural(r.imported.length, 'server')}. Discovering their tools…`)
       void qc.invalidateQueries({ queryKey: keys.servers })
       void qc.invalidateQueries({ queryKey: keys.import })
       void qc.invalidateQueries({ queryKey: keys.config })
@@ -67,134 +74,155 @@ export function ImportPage() {
   })
 
   const clientName = (id: string) => clients.data?.find((c) => c.id === id)?.name ?? id
+  const hasCandidates = groups.length > 0
 
   return (
-    <>
-      <PageHeader
-        title="Import servers"
-        description="MCP servers found in the configuration files of your AI clients. Importing copies them into Switchboard; the client files are not changed."
-        actions={
-          <Button
-            variant="primary"
-            disabled={!selected.length || nameErrors.size > 0}
-            loading={run.isPending}
-            onClick={() => run.mutate()}
-          >
-            Import {selected.length || ''} selected
-          </Button>
-        }
-      />
-      {run.error && (
-        <div className="mb-4">
-          <ErrorBox error={run.error} title="Import failed" />
-        </div>
-      )}
+    <Page
+      title="Import servers"
+      description="MCP servers found in the configuration files of your AI clients. Importing copies them into Switchboard and starts them; the client files are not changed."
+      footer={
+        hasCandidates ? (
+          <>
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {selected.length ? `${plural(selected.length, 'server')} selected` : 'Nothing selected'}
+              {nameErrors.size > 0 && (
+                <span className="text-destructive"> · fix {plural(nameErrors.size, 'name')}</span>
+              )}
+            </p>
+            <Button
+              disabled={!selected.length || nameErrors.size > 0 || run.isPending}
+              onClick={() => run.mutate()}
+            >
+              {run.isPending ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <DownloadIcon data-icon="inline-start" />
+              )}
+              Import {selected.length || ''} selected
+            </Button>
+          </>
+        ) : undefined
+      }
+    >
+      {run.error && <ErrorAlert error={run.error} title="Import failed" />}
       {candidates.isPending ? (
-        <Loading label="Reading client configs" />
+        <LoadingState />
       ) : candidates.error ? (
-        <ErrorBox error={candidates.error} />
-      ) : !groups.length ? (
-        <EmptyState
-          title="Nothing to import"
-          action={
-            <>
-              <Button variant="primary" onClick={() => navigate('/servers/new')}>
-                Add a server
-              </Button>
-              <Button onClick={() => navigate('/clients')}>See detected clients</Button>
-            </>
-          }
-        >
-          No MCP servers were found in the config files of Cursor, Claude Code, Claude Desktop, VS Code and
-          the other supported clients. Add one by hand instead.
-        </EmptyState>
+        <ErrorAlert error={candidates.error} />
+      ) : !hasCandidates ? (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <PackageSearchIcon />
+            </EmptyMedia>
+            <EmptyTitle>Nothing to import</EmptyTitle>
+            <EmptyDescription>
+              No MCP servers were found in the config files of Cursor, Claude Code, Claude Desktop, VS Code
+              and the other supported clients. Add one by hand instead.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent className="flex-row justify-center">
+            <Button onClick={() => navigate('/servers/new')}>Add a server</Button>
+            <Button variant="outline" onClick={() => navigate('/clients')}>
+              See detected clients
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : (
-        <div className="space-y-4">
+        <>
           {groups.map(([client, items]) => {
             const all = items.every(isPicked)
             return (
-              <Card
-                key={client}
-                title={clientName(client)}
-                description={`${items.length} server${items.length === 1 ? '' : 's'}`}
-                actions={
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setPicked((p) => ({ ...p, ...Object.fromEntries(items.map((c) => [keyOf(c), !all])) }))
-                    }
-                  >
-                    {all ? 'Select none' : 'Select all'}
-                  </Button>
-                }
-                bodyClassName="divide-y divide-line"
-              >
-                {items.map((c) => {
-                  const k = keyOf(c)
-                  const err = isPicked(c) ? nameErrors.get(k) : undefined
-                  const checkboxId = `imp-${k}`
-                  return (
-                    <div key={k} className="flex flex-wrap items-start gap-3 px-4 py-3">
-                      <input
-                        id={checkboxId}
-                        type="checkbox"
-                        className="mt-1.5 size-4 accent-[var(--sb-accent)]"
-                        checked={isPicked(c)}
-                        onChange={(e) => setPicked((p) => ({ ...p, [k]: e.target.checked }))}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <label
-                          htmlFor={checkboxId}
-                          className="flex flex-wrap items-center gap-2 text-sm font-medium"
-                        >
-                          {c.originalName}
-                          <Badge>{c.server.transport}</Badge>
-                          {c.exists && (
-                            <Badge tone="warn" title="Importing replaces the existing server with this name">
-                              exists
-                            </Badge>
-                          )}
-                        </label>
-                        <code
-                          className="mt-0.5 block truncate font-mono text-xs text-muted"
-                          title={describe(c)}
-                        >
-                          {describe(c)}
-                        </code>
-                      </div>
-                      <div className="w-full sm:w-56">
-                        <label className="sr-only" htmlFor={`${checkboxId}-name`}>
-                          Import {c.originalName} as
-                        </label>
-                        <input
-                          id={`${checkboxId}-name`}
-                          className={monoInputClass}
-                          value={nameOf(c)}
-                          aria-invalid={!!err}
-                          disabled={!isPicked(c)}
-                          onChange={(e) => setNames((n) => ({ ...n, [k]: e.target.value }))}
+              <Card key={client} className="pb-0">
+                <CardHeader className="border-b">
+                  <CardTitle>{clientName(client)}</CardTitle>
+                  <CardDescription>{plural(items.length, 'server')}</CardDescription>
+                  <CardAction>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setPicked((p) => ({
+                          ...p,
+                          ...Object.fromEntries(items.map((c) => [keyOf(c), !all])),
+                        }))
+                      }
+                    >
+                      {all ? 'Select none' : 'Select all'}
+                    </Button>
+                  </CardAction>
+                </CardHeader>
+                <ul className="divide-y">
+                  {items.map((c) => {
+                    const k = keyOf(c)
+                    const on = isPicked(c)
+                    const err = on ? nameErrors.get(k) : undefined
+                    const checkboxId = `imp-${k}`
+                    return (
+                      <li key={k} className="flex flex-wrap items-start gap-3 px-4 py-3">
+                        <Checkbox
+                          id={checkboxId}
+                          className="mt-0.5"
+                          checked={on}
+                          onCheckedChange={(checked) => setPicked((p) => ({ ...p, [k]: checked === true }))}
                         />
-                        {err && <p className="mt-1 text-xs text-bad">{err}</p>}
-                        {!err && c.exists && isPicked(c) && nameOf(c) === c.name && (
-                          <p className="mt-1 text-xs text-warn">Replaces the existing “{c.name}”.</p>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <label
+                            htmlFor={checkboxId}
+                            className="flex flex-wrap items-center gap-2 text-sm font-medium"
+                          >
+                            {c.originalName}
+                            <Badge variant="outline">{c.server.transport}</Badge>
+                            {c.exists && (
+                              <Badge variant="secondary" title="Importing replaces the existing server">
+                                exists
+                              </Badge>
+                            )}
+                          </label>
+                          <code
+                            className="truncate font-mono text-xs text-muted-foreground"
+                            title={describe(c)}
+                          >
+                            {describe(c)}
+                          </code>
+                        </div>
+                        <Field
+                          className="w-full sm:w-56"
+                          data-invalid={!!err || undefined}
+                          data-disabled={!on || undefined}
+                        >
+                          <FieldLabel htmlFor={`${checkboxId}-name`} className="sr-only">
+                            Import {c.originalName} as
+                          </FieldLabel>
+                          <Input
+                            id={`${checkboxId}-name`}
+                            className="font-mono"
+                            value={nameOf(c)}
+                            aria-invalid={!!err || undefined}
+                            disabled={!on}
+                            onChange={(e) => setNames((n) => ({ ...n, [k]: e.target.value }))}
+                          />
+                          <FieldError>{err}</FieldError>
+                          {!err && c.exists && on && nameOf(c) === c.name && (
+                            <FieldDescription>Replaces the existing “{c.name}”.</FieldDescription>
+                          )}
+                        </Field>
+                      </li>
+                    )
+                  })}
+                </ul>
               </Card>
             )
           })}
-          <p className="text-xs text-muted">
+          <p className="text-sm text-muted-foreground">
             Tokens in imported entries are copied as plain values. Move them to{' '}
-            <Link to="/secrets" className="text-accent hover:underline">
+            <Link to="/secrets" className="underline underline-offset-2 hover:text-foreground">
               Secrets
             </Link>{' '}
-            afterwards and reference them as <code className="font-mono">secret://NAME</code>.
+            afterwards and reference them as <InlineCode>secret://NAME</InlineCode>.
           </p>
-        </div>
+        </>
       )}
-    </>
+    </Page>
   )
 }

@@ -12,10 +12,15 @@ function subscribe(listener: () => void) {
 }
 
 export function navigate(to: string, { replace = false } = {}): void {
-  if (to === location.pathname + location.search) return
+  if (to === location.pathname + location.search + location.hash) return
   history[replace ? 'replaceState' : 'pushState'](null, '', to)
-  window.scrollTo(0, 0)
   notify()
+  const hash = new URL(to, location.origin).hash.slice(1)
+  if (!hash) {
+    if (!replace) window.scrollTo(0, 0)
+  }
+  // Let the new page render, then bring the anchor into view.
+  else requestAnimationFrame(() => document.getElementById(hash)?.scrollIntoView({ block: 'start' }))
 }
 
 export function useLocation(): { path: string; query: URLSearchParams } {

@@ -11,6 +11,10 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 - Servers with `idleTimeoutSec: 0` start with the daemon and are kept running.
 - `switchboard client connect ID --auto` and `switchboard connect` without `--profile` use the shared `/mcp` endpoint, where client rules and the default profile pick the profile.
 
+### Changed
+
+- The web UI is rebuilt with shadcn/ui: light and dark themes, a collapsible sidebar, onboarding and copy-paste connection snippets on the overview, a "Set up with AI" prompt, a clearer Clients page with an automatic (client rules) option, sticky profile previews, and charts of calls, errors and latency on the Activity page.
+
 ### Fixed
 
 - Adding a server, or adding one to a profile a client already uses, now starts it to discover its tools and tells connected clients, instead of waiting until the server was tested by hand.

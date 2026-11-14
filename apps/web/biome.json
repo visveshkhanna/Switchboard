@@ -6,5 +6,8 @@
     "parser": {
       "tailwindDirectives": true
     }
+  },
+  "files": {
+    "includes": ["**", "!src/components/ui", "!src/hooks/use-mobile.ts"]
   }
 }

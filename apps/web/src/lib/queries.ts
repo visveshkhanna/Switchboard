@@ -1,15 +1,18 @@
 import { type QueryClient, useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { adminToken, enc, get } from './api.ts'
+import { ApiError, adminToken, enc, get } from './api.ts'
 import type {
   AuditEvent,
   ClientState,
-  Config,
+  ConfigWithSettings,
   ConnectionStatus,
   ImportCandidate,
   Secrets,
   ServerRow,
   SessionInfo,
+  Settings,
+  Stats,
+  StatsRange,
   Status,
   ToolDef,
 } from './types.ts'
@@ -23,12 +26,15 @@ export const keys = {
   clients: ['clients'] as const,
   secrets: ['secrets'] as const,
   import: ['import'] as const,
+  settings: ['settings'] as const,
+  stats: (range: StatsRange) => ['stats', range] as const,
   tools: (name: string) => ['tools', name] as const,
   logs: (name: string) => ['logs', name] as const,
 }
 
 export const useStatus = () => useQuery({ queryKey: keys.status, queryFn: () => get<Status>('/status') })
-export const useConfig = () => useQuery({ queryKey: keys.config, queryFn: () => get<Config>('/config') })
+export const useConfig = () =>
+  useQuery({ queryKey: keys.config, queryFn: () => get<ConfigWithSettings>('/config') })
 export const useServers = () =>
   useQuery({ queryKey: keys.servers, queryFn: () => get<ServerRow[]>('/servers') })
 export const useSessions = () =>
@@ -40,6 +46,27 @@ export const useClients = () =>
 export const useSecrets = () => useQuery({ queryKey: keys.secrets, queryFn: () => get<Secrets>('/secrets') })
 export const useImport = () =>
   useQuery({ queryKey: keys.import, queryFn: () => get<ImportCandidate[]>('/import') })
+/** Resolve to null when the daemon is too old to have this endpoint. */
+async function optional<T>(path: string): Promise<T | null> {
+  try {
+    return await get<T>(path)
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 405)) return null
+    throw error
+  }
+}
+
+/** Activity-log settings; null when the daemon does not support them. */
+export const useSettings = () =>
+  useQuery({ queryKey: keys.settings, queryFn: () => optional<Settings>('/settings') })
+/** Usage statistics; null when the daemon does not support them. */
+export const useStats = (range: StatsRange) =>
+  useQuery({
+    queryKey: keys.stats(range),
+    queryFn: () => optional<Stats>(`/stats?range=${range}`),
+    refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
+  })
 export const useTools = (name: string, enabled = true) =>
   useQuery({
     queryKey: keys.tools(name),
@@ -72,6 +99,8 @@ export function useLiveEvents(qc: QueryClient): LiveState {
     source.addEventListener('audit', (e) => {
       const event = parse(e) as AuditEvent
       qc.setQueryData<AuditEvent[]>(keys.audit, (old) => (old ? [event, ...old].slice(0, 1000) : old))
+      // A new call is the first sign a client is connected; refresh onboarding state lazily.
+      void qc.invalidateQueries({ queryKey: ['stats'], refetchType: 'none' })
     })
     source.addEventListener('server', (e) => {
       const status = parse(e) as ConnectionStatus
@@ -86,7 +115,9 @@ export function useLiveEvents(qc: QueryClient): LiveState {
       qc.setQueryData<Status>(keys.status, (old) => (old ? { ...old, sessions: sessions.length } : old))
     })
     source.addEventListener('config', (e) => {
-      qc.setQueryData(keys.config, parse(e) as Config)
+      const config = parse(e) as ConfigWithSettings
+      qc.setQueryData(keys.config, config)
+      if (config.settings) qc.setQueryData(keys.settings, config.settings)
       void qc.invalidateQueries({ queryKey: keys.servers })
       void qc.invalidateQueries({ queryKey: keys.status })
       void qc.invalidateQueries({ queryKey: keys.import })

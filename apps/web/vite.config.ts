@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
@@ -46,6 +47,7 @@ const proxy = {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), devToken()],
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: {
     proxy: { '/api': proxy, '/p': proxy, '/mcp': proxy, '/healthz': proxy },
   },
