@@ -94,7 +94,7 @@ export class UpstreamManager extends EventEmitter<ManagerEvents> {
     return this.ensureCatalog([...this.#connections.keys()])
   }
 
-  async stopAll(): Promise<void> {
-    await Promise.all(this.list().map((c) => c.stop()))
+  async stopAll(opts: { fast?: boolean } = {}): Promise<void> {
+    await Promise.all(this.list().map((c) => c.stop(opts)))
   }
 }

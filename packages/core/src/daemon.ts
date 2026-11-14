@@ -237,12 +237,20 @@ export class Daemon {
     return this.#info
   }
 
+  /**
+   * Shut down quickly: stop accepting connections and drop open ones (the
+   * web UI's event stream and clients' MCP streams never end on their own),
+   * end sessions, and stop servers without waiting for them politely.
+   */
   async close(): Promise<void> {
     clearInterval(this.#pruneTimer)
     this.config.close()
+    const server = this.#server as (ServerType & { closeAllConnections?: () => void }) | undefined
+    const closed = new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()))
     await this.sessions.closeAll()
-    await new Promise<void>((resolve) => (this.#server ? this.#server.close(() => resolve()) : resolve()))
-    await this.upstream.stopAll()
+    server?.closeAllConnections?.()
+    await Promise.race([closed, new Promise((r) => setTimeout(r, 1000).unref())])
+    await this.upstream.stopAll({ fast: true })
     await this.catalog.flush()
     await this.audit.flush()
     await this.seen.flush()

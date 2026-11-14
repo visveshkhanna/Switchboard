@@ -59,6 +59,26 @@ describe('server lifecycle', () => {
     expect(next).not.toBe(pid)
   })
 
+  it('shuts down at once, even with open streams and running servers', async () => {
+    t = await startDaemon({
+      servers: { alpha: { ...stdioServer('alpha'), idleTimeoutSec: 0 } },
+      profiles: { work: { servers: ['alpha'], surface: 'passthrough' } },
+    })
+    const connection = t.daemon.upstream.get('alpha')!
+    await waitFor(() => connection.state === 'ready', 10_000)
+    const pid = connection.status().pid!
+    // The web UI's event stream never ends on its own.
+    const events = await fetch(`${t.url}/api/events?token=${t.daemon.adminToken}`)
+    expect(events.status).toBe(200)
+    const { client } = await t.connect('/p/work/mcp')
+    await client.listTools()
+
+    const started = performance.now()
+    await t.daemon.close()
+    expect(performance.now() - started).toBeLessThan(1500)
+    expect(() => process.kill(pid, 0)).toThrow()
+  })
+
   it('keeps servers with idleTimeoutSec 0 running from the start', async () => {
     t = await startDaemon({ servers: { alpha: { ...stdioServer('alpha'), idleTimeoutSec: 0 } } })
     await waitFor(() => t.daemon.upstream.get('alpha')!.state === 'ready', 10_000)

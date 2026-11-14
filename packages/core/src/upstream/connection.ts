@@ -296,19 +296,30 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
     }
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Stop the server. Normally a stdio server gets a few seconds to exit after
+   * its stdin closes; with `fast` (daemon shutdown) it is sent SIGTERM at
+   * once and SIGKILL half a second later if it is still running.
+   */
+  async stop({ fast = false }: { fast?: boolean } = {}): Promise<void> {
     clearTimeout(this.#idleTimer)
     clearTimeout(this.#restartTimer)
     this.#restartTimer = undefined
     this.#nextRestartAt = undefined
     this.#crashes = 0
     const client = this.#client
+    const pid = this.#transport instanceof StdioClientTransport ? this.#transport.pid : null
     this.#stopping = true
     this.#client = undefined
     this.#transport = undefined
-    try {
-      await client?.close()
-    } catch {}
+    const closing = client?.close().catch(() => undefined)
+    if (fast && pid) {
+      signal(pid, 'SIGTERM')
+      await Promise.race([closing, new Promise((r) => setTimeout(r, 500).unref())])
+      signal(pid, 'SIGKILL')
+    } else {
+      await closing
+    }
     this.#stopping = false
     if (this.#state !== 'error') this.#setState('stopped')
   }
@@ -440,6 +451,14 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
 
   #emitStatus(): void {
     this.emit('status', this.status())
+  }
+}
+
+function signal(pid: number, name: NodeJS.Signals): void {
+  try {
+    process.kill(pid, name)
+  } catch {
+    // Already gone.
   }
 }
 

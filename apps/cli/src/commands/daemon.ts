@@ -100,9 +100,13 @@ export async function up(opts: {
 
   let stopping = false
   const stop = async () => {
-    if (stopping) return
+    // A second Ctrl+C exits at once.
+    if (stopping) process.exit(130)
     stopping = true
-    await daemon.close()
+    if (process.stdout.isTTY) process.stdout.write(dim('\nStopping… (Ctrl+C again to force)\n'))
+    // Never hang on shutdown: whatever is left after 5 seconds is abandoned.
+    setTimeout(() => process.exit(1), 5000).unref()
+    await daemon.close().catch(() => undefined)
     process.exit(0)
   }
   process.on('SIGINT', () => void stop())

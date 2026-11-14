@@ -27,6 +27,7 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 - Hand edits of `config.json` are no longer missed when the file watcher drops an event.
 - A remote server waiting for OAuth sign-in is no longer restarted as if it had crashed.
 - Menu and select items show a hover state, and the selected Activity time range is highlighted.
+- Ctrl+C stops `switchboard up` at once instead of waiting for the web UI's open event stream, and stops the MCP servers it started; a second Ctrl+C exits immediately.
 
 ## [0.1.0] - 2026-11-14
 
