@@ -4,6 +4,10 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-14
+
+The first release.
+
 ### Added
 
 - Monorepo scaffold: pnpm workspaces, Turborepo, Biome, Vitest and TypeScript.
@@ -29,3 +33,6 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 - Secrets referenced as `secret://name`, stored in the OS keychain when available.
 - OAuth sign-in for remote MCP servers, with tokens kept in the secret store.
 - The `switchboard` CLI: `up`, `stop`, `status`, `doctor`, `import`, `server`, `profile`, `default`, `rule`, `client`, `secret` and the `connect` stdio bridge.
+
+[Unreleased]: https://github.com/visveshkhanna/Switchboard/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/visveshkhanna/Switchboard/releases/tag/v0.1.0

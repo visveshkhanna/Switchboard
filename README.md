@@ -4,7 +4,7 @@
 
 Group your MCP servers into profiles, such as personal, work and a client's, and give Cursor, Claude Code, VS Code and every other agent only the tools it should see. Switchboard runs on your machine, starts servers only when a tool is called, and can shrink hundreds of tool definitions into a few search/execute tools or a single code-mode tool.
 
-> Switchboard is under active development. The first release is v0.1.0.
+> Switchboard is new: v0.1.0 is the first release. Feedback and issues are welcome.
 
 ## Why
 
