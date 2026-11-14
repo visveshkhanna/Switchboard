@@ -16,3 +16,7 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 - `config.json` is reloaded when edited by hand; invalid edits are reported and ignored.
 - An audit log of tool calls, without arguments or results.
 - Loopback-only binding with `Host` and `Origin` checks.
+- The `meta` tool surface: `search_tools`, `get_schema` and `call_tool` replace a profile's tools with three, whatever its size.
+- Offline BM25 tool search that understands camelCase and snake_case names.
+- Tool schemas rendered as TypeScript signatures for models.
+- The `auto` surface, which switches from `passthrough` to `meta` above `autoThreshold` tools.

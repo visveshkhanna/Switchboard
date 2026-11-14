@@ -16,6 +16,7 @@ import { type Paths, resolvePaths } from './paths.ts'
 import { ProfileViews } from './profiles/view.ts'
 import { openSecretBackend, type SecretBackend } from './secrets.ts'
 import { SessionRegistry } from './sessions.ts'
+import { metaSurface } from './surfaces/meta.ts'
 import { passthroughSurface } from './surfaces/passthrough.ts'
 import type { ConcreteSurface, ToolSurface } from './surfaces/types.ts'
 import { UpstreamManager } from './upstream/manager.ts'
@@ -163,7 +164,7 @@ export class Daemon {
 
 async function createSurfaces(gateway: Gateway): Promise<Record<ConcreteSurface, ToolSurface>> {
   const passthrough = passthroughSurface({ gateway })
-  return { passthrough, meta: passthrough, code: passthrough }
+  return { passthrough, meta: metaSurface({ gateway }), code: passthrough }
 }
 
 /** The token that protects the admin API, created on first start and readable only by the user. */
