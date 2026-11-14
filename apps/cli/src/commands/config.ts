@@ -36,6 +36,7 @@ import {
   paths,
   red,
   runningDaemon,
+  safeBrowserUrl,
   table,
   UsageError,
   VERSION,
@@ -172,8 +173,11 @@ export async function serverAuth(name: string | undefined) {
   )
   if (result.signedIn) return console.log(`${bold(server)} is already signed in.`)
   if (!result.authUrl) throw new Error(result.error ?? 'The server did not ask for sign-in.')
-  console.log(`Opening the sign-in page for ${bold(server)}:\n${cyan(result.authUrl)}`)
-  openBrowser(result.authUrl)
+  const authUrl = safeBrowserUrl(result.authUrl)
+  if (!authUrl)
+    throw new Error(`${server} asked to open a sign-in page that is not an http(s) URL; not opening it.`)
+  console.log(`Opening the sign-in page for ${bold(server)}:\n${cyan(authUrl)}`)
+  openBrowser(authUrl)
   for (let i = 0; i < 300; i++) {
     await new Promise((r) => setTimeout(r, 1000))
     const servers = await api<{ name: string; status?: { state: string } }[]>('/servers')

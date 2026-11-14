@@ -85,18 +85,40 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return body
 }
 
-export function openBrowser(url: string): void {
+/** Parse a URL and accept it only if it is http or https; returns it normalized. */
+export function safeBrowserUrl(raw: string): string | undefined {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return undefined
+  }
+  return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : undefined
+}
+
+/**
+ * Open a web page in the default browser. URLs can come from remote servers
+ * (OAuth authorization URLs), so only http(s) URLs are opened, and never
+ * through a shell: on Windows `cmd /c start` would parse `&` in the URL as a
+ * command separator, so rundll32's URL handler is used instead.
+ */
+export function openBrowser(raw: string): boolean {
+  const url = safeBrowserUrl(raw)
+  if (!url) return false
   const [cmd, args] =
     process.platform === 'darwin'
       ? ['open', [url]]
       : process.platform === 'win32'
-        ? ['cmd', ['/c', 'start', '', url]]
+        ? ['rundll32.exe', ['url.dll,FileProtocolHandler', url]]
         : ['xdg-open', [url]]
   try {
-    spawn(cmd, args, { stdio: 'ignore', detached: true })
+    spawn(cmd, args, { stdio: 'ignore', detached: true, shell: false, windowsHide: true })
       .on('error', () => undefined)
       .unref()
-  } catch {}
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Parse `KEY=VALUE` pairs. */

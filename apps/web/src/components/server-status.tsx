@@ -64,6 +64,16 @@ export function SignInCard({ name, authUrl }: { name: string; authUrl?: string }
   )
 }
 
+/** Only http(s) links from a server are opened; never javascript: or other schemes. */
+function httpUrl(raw: string): string | undefined {
+  try {
+    const url = new URL(raw)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** Start an OAuth sign-in for a server and open the provider's page. */
 export function SignInButton({ name, size = 'sm' }: { name: string; size?: 'sm' | 'default' }) {
   const auth = useMutation({
@@ -72,8 +82,10 @@ export function SignInButton({ name, size = 'sm' }: { name: string; size?: 'sm' 
         `/servers/${enc(name)}/auth`,
       ),
     onSuccess: (r) => {
-      if (r.authUrl) {
-        window.open(r.authUrl, '_blank', 'noopener')
+      const url = r.authUrl ? httpUrl(r.authUrl) : undefined
+      if (r.authUrl && !url) toast.error(`${name} returned a sign-in link that is not an http(s) URL`)
+      else if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer')
         toast.info(`Finish signing in to ${name} in the new tab`)
       } else if (r.signedIn) toast.success(`${name} is signed in`)
       else toast.error(r.error ?? 'The server did not ask for sign-in')
