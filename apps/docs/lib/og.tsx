@@ -34,7 +34,7 @@ export function iconImage(size: number, { opaque = false }: { opaque?: boolean }
           width: '100%',
           height: '100%',
           display: 'flex',
-          background: opaque ? '#4f46e5' : 'transparent',
+          background: opaque ? '#0a0a0a' : 'transparent',
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -82,7 +82,7 @@ export function ogImage({
           width={400}
           height={400}
           alt=""
-          style={{ position: 'absolute', right: 96, top: 115, borderRadius: 88, boxShadow: '0 0 120px rgba(99,102,241,0.28)' }}
+          style={{ position: 'absolute', right: 96, top: 115, borderRadius: 88, boxShadow: '0 0 120px rgba(245,158,11,0.18)' }}
         />
         <div
           style={{
