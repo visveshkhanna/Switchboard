@@ -58,6 +58,7 @@ export class Daemon {
   #server?: ServerType
   #info?: DaemonInfo
   #onListen?: (port: number) => void
+  #pruneTimer?: NodeJS.Timeout
 
   private constructor(
     readonly paths: Paths,
@@ -94,7 +95,10 @@ export class Daemon {
     })
     await upstream.apply(config.config)
     const views = new ProfileViews(() => ({ config: config.config, revision: config.revision }), catalog)
-    const audit = new AuditLog(paths.audit)
+    const audit = new AuditLog(paths.audit, {
+      persist: () => config.config.settings.activityLog === true,
+      retentionDays: () => config.config.settings.retentionDays,
+    })
     const gateway = new Gateway(views, upstream, audit)
     const surfaces = await createSurfaces(gateway)
     const sessions = new SessionRegistry({ gateway, upstream, surfaces, log: log.child('mcp'), version })
@@ -201,6 +205,9 @@ export class Daemon {
     await writeJson(this.paths.pid, this.#info)
     this.config.watch()
     for (const connection of this.upstream.list()) connection.keepAlive()
+    void this.audit.prune().catch(() => undefined)
+    this.#pruneTimer = setInterval(() => void this.audit.prune().catch(() => undefined), 6 * 60 * 60_000)
+    this.#pruneTimer.unref()
     if (this.options.warmCatalog !== false) void this.upstream.warm()
     this.log.info(
       `${brand.displayName} listening on http://${host === '::1' ? '[::1]' : host}:${address.port}`,
@@ -209,6 +216,7 @@ export class Daemon {
   }
 
   async close(): Promise<void> {
+    clearInterval(this.#pruneTimer)
     this.config.close()
     await this.sessions.closeAll()
     await new Promise<void>((resolve) => (this.#server ? this.#server.close(() => resolve()) : resolve()))

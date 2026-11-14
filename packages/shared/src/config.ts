@@ -94,6 +94,14 @@ export const clientRuleSchema = z.object({
 })
 export type ClientRule = z.infer<typeof clientRuleSchema>
 
+export const settingsSchema = z.object({
+  /** Keep tool-call activity in audit.jsonl. Unset until the user has been asked. */
+  activityLog: z.boolean().optional(),
+  /** Days of activity to keep on disk. */
+  retentionDays: z.number().int().min(1).max(365).default(30),
+})
+export type Settings = z.infer<typeof settingsSchema>
+
 export const configSchema = z.object({
   $schema: z.string().optional(),
   version: z.literal(1).default(1),
@@ -103,6 +111,7 @@ export const configSchema = z.object({
   clientRules: z.array(clientRuleSchema).default([]),
   /** Used when nothing else picks a profile. Unset means such connections are refused. */
   defaultProfile: slugSchema.optional(),
+  settings: settingsSchema.default(settingsSchema.parse({})),
 })
 export type Config = z.infer<typeof configSchema>
 export type ConfigInput = z.input<typeof configSchema>

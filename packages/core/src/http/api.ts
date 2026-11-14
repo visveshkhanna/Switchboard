@@ -7,6 +7,7 @@ import {
   configSchema,
   profileSchema,
   serverConfigSchema,
+  settingsSchema,
   slugSchema,
 } from '@switchboard/shared'
 import { type Context, Hono } from 'hono'
@@ -15,6 +16,7 @@ import { z } from 'zod'
 import { connectClient, disconnectClient, importCandidates, listClients } from '../clients/files.ts'
 import type { Daemon } from '../daemon.ts'
 import { buildProfileView } from '../profiles/view.ts'
+import { computeStats, RANGES, type Range } from '../stats.ts'
 import { pickSurface } from '../surfaces/types.ts'
 
 function tokenMatches(given: string | undefined, expected: string): boolean {
@@ -247,6 +249,32 @@ export function adminApi(daemon: Daemon): Hono {
     }
   })
 
+  // Settings
+  const settingsView = () => ({
+    activityLog: config().settings.activityLog ?? null,
+    retentionDays: config().settings.retentionDays,
+  })
+  api.get('/settings', (c) => c.json(settingsView()))
+  api.put('/settings', async (c) => {
+    try {
+      const patch = settingsSchema.partial().parse(await c.req.json())
+      await update((d) => ({ ...d, settings: { ...d.settings, ...patch } }))
+      if (patch.retentionDays) void daemon.audit.prune().catch(() => undefined)
+      return c.json(settingsView())
+    } catch (error) {
+      return problem(c, error)
+    }
+  })
+
+  // Charts for the activity page
+  api.get('/stats', async (c) => {
+    const range = (c.req.query('range') ?? '24h') as Range
+    if (!(range in RANGES))
+      return c.json({ error: `range must be one of ${Object.keys(RANGES).join(', ')}` }, 400)
+    const { events, source } = await daemon.audit.since(Date.now() - RANGES[range].durationMs)
+    return c.json(computeStats(events, range, source))
+  })
+
   // Sessions and activity
   api.get('/sessions', (c) => c.json(daemon.sessions.list()))
   api.get('/audit', (c) => c.json(daemon.audit.recent(Number(c.req.query('limit') ?? 200))))
@@ -296,13 +324,15 @@ export function adminApi(daemon: Daemon): Hono {
   })
 
   // AI clients
-  const endpoint = (profile: string) =>
-    `http://127.0.0.1:${daemon.info?.port ?? brand.defaultPort}/p/${profile}/mcp`
+  const endpoint = (profile: string | null) =>
+    `http://127.0.0.1:${daemon.info?.port ?? brand.defaultPort}${profile ? `/p/${profile}` : ''}/mcp`
   api.get('/clients', async (c) => c.json(await listClients(daemon.clientEnv)))
   api.post('/clients/:id/connect', async (c) => {
     try {
-      const { profile } = z.object({ profile: slugSchema }).parse(await c.req.json())
-      if (!config().profiles[profile]) return c.json({ error: `Unknown profile "${profile}"` }, 404)
+      // profile null connects to the shared /mcp endpoint, where client rules decide.
+      const { profile } = z.object({ profile: slugSchema.nullable() }).parse(await c.req.json())
+      if (profile && !config().profiles[profile])
+        return c.json({ error: `Unknown profile "${profile}"` }, 404)
       const result = await connectClient(
         c.req.param('id'),
         { url: endpoint(profile), profile },

@@ -16,6 +16,8 @@ export interface ClientState {
   configExists: boolean
   /** The profile Switchboard's entry points at, if there is one. */
   connectedProfile?: string
+  /** `profile`: a fixed profile; `auto`: the shared endpoint, where client rules decide. */
+  connectedMode?: 'profile' | 'auto'
   /** Switchboard's entry exists but does not look like one it wrote. */
   foreignEntry?: boolean
   /** Other MCP servers in the file, which can be imported. */
@@ -64,16 +66,35 @@ function serversOf(
   return node && typeof node === 'object' ? (node as Record<string, Record<string, unknown>>) : {}
 }
 
-/** Which profile an entry we wrote points at. */
-export function profileOfEntry(entry: Record<string, unknown>): string | undefined {
+/** What an entry we wrote points at; undefined if Switchboard did not write it. */
+export function entryTarget(
+  entry: Record<string, unknown>,
+): { mode: 'profile'; profile: string } | { mode: 'auto' } | undefined {
   const url = (entry.url ?? entry.serverUrl ?? entry.httpUrl) as string | undefined
-  if (url) return url.match(/\/p\/([^/]+)\/mcp\/?$/)?.[1]
+  if (url) {
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      return undefined
+    }
+    if (!['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname)) return undefined
+    const profile = parsed.pathname.match(/^\/p\/([^/]+)\/mcp\/?$/)?.[1]
+    if (profile) return { mode: 'profile', profile }
+    return /^\/mcp\/?$/.test(parsed.pathname) ? { mode: 'auto' } : undefined
+  }
   const args = entry.args as string[] | undefined
-  if (Array.isArray(args) && args.includes('connect')) {
+  if (Array.isArray(args) && args.includes(brand.packageName) && args.includes('connect')) {
     const i = args.indexOf('--profile')
-    return i >= 0 ? args[i + 1] : undefined
+    return i >= 0 && args[i + 1] ? { mode: 'profile', profile: args[i + 1]! } : { mode: 'auto' }
   }
   return undefined
+}
+
+/** Which profile an entry we wrote points at. */
+export function profileOfEntry(entry: Record<string, unknown>): string | undefined {
+  const target = entryTarget(entry)
+  return target?.mode === 'profile' ? target.profile : undefined
 }
 
 export async function clientState(client: ClientDef, env: ClientEnv): Promise<ClientState> {
@@ -92,8 +113,10 @@ export async function clientState(client: ClientDef, env: ClientEnv): Promise<Cl
     const servers = serversOf(client, data)
     const ours = servers[ENTRY_NAME]
     if (ours) {
-      state.connectedProfile = profileOfEntry(ours)
-      state.foreignEntry = !state.connectedProfile
+      const target = entryTarget(ours)
+      state.connectedMode = target?.mode
+      if (target?.mode === 'profile') state.connectedProfile = target.profile
+      state.foreignEntry = !target
     }
     state.serverCount = Object.keys(servers).filter((n) => n !== ENTRY_NAME).length
   } catch (error) {
@@ -123,7 +146,7 @@ async function writeEntry(
   const path = await configPath(client, env)
   const { text, data } = await readDocument(client, path)
   const existing = serversOf(client, data)[ENTRY_NAME]
-  if (existing && !profileOfEntry(existing)) {
+  if (existing && !entryTarget(existing)) {
     throw new Error(
       `${path} already has a "${ENTRY_NAME}" entry that ${brand.displayName} did not write. Rename or remove it first.`,
     )

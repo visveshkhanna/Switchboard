@@ -17,7 +17,8 @@ export interface ClientEnv {
 export interface ConnectTarget {
   /** Streamable HTTP endpoint for the profile, e.g. http://127.0.0.1:7690/p/work/mcp */
   url: string
-  profile: string
+  /** null: the shared /mcp endpoint, where client rules and the default profile decide. */
+  profile: string | null
 }
 
 export interface ClientDef {
@@ -46,8 +47,10 @@ function appSupport(env: ClientEnv, ...parts: string[]): string {
 }
 
 /** The stdio bridge, for clients that cannot connect to HTTP servers. */
-export function bridgeEntry(profile: string): Record<string, unknown> {
-  return { command: 'npx', args: ['-y', brand.packageName, 'connect', '--profile', profile] }
+export function bridgeEntry(profile: string | null): Record<string, unknown> {
+  const args = ['-y', brand.packageName, 'connect']
+  if (profile) args.push('--profile', profile)
+  return { command: 'npx', args }
 }
 
 export const CLIENTS: ClientDef[] = [
