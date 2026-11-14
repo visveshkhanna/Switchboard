@@ -21,8 +21,13 @@ export const metadata: Metadata = {
   description,
   applicationName: appName,
   alternates: { canonical: '/' },
-  // app/icon.svg is linked by Next.js; PNGs for the platforms that need them.
+  // Listing icons here replaces the link Next.js would generate for
+  // app/icon.svg, so every icon is declared explicitly.
   icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '48x48' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
     apple: [{ url: '/brand/apple-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   openGraph: {
