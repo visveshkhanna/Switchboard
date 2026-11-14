@@ -1,0 +1,10 @@
+packages:
+  - apps/cli
+  - apps/web
+  - packages/*
+# apps/docs is a standalone npm project, deployed on its own to Cloudflare.
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd

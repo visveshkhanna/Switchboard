@@ -1,0 +1,25 @@
+{
+  "name": "switchboard-monorepo",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.33.3",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --filter=mcp-switchboard --filter=@switchboard/web",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "check": "pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.7",
+    "@types/node": "^26.6.6",
+    "turbo": "^2.11.11",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

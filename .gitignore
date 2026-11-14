@@ -1,0 +1,27 @@
+# Local working notes and cloned reference repos (never committed)
+/dump/
+/ref/
+
+# Dependencies and build output
+node_modules/
+dist/
+out/
+.next/
+.turbo/
+.wrangler/
+coverage/
+*.tsbuildinfo
+
+# Local data and env
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+*.log
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

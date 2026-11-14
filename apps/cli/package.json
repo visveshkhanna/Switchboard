@@ -1,0 +1,49 @@
+{
+  "name": "mcp-switchboard",
+  "version": "0.0.0",
+  "description": "One local MCP endpoint for all your AI agents, with per-client profiles, search/execute and code mode.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Visvesh Khanna <visveshkhanna@gmail.com>",
+  "homepage": "https://switchboard.visvesh.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/visveshkhanna/Switchboard.git",
+    "directory": "apps/cli"
+  },
+  "bugs": "https://github.com/visveshkhanna/Switchboard/issues",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-gateway",
+    "mcp-proxy",
+    "ai-agents",
+    "cursor",
+    "claude-code"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "switchboard": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx watch src/cli.ts up",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@switchboard/core": "workspace:*",
+    "@switchboard/shared": "workspace:*",
+    "tsup": "^9.0.0",
+    "tsx": "^4.23.15"
+  }
+}
