@@ -16,6 +16,10 @@
     "typecheck": {
       "dependsOn": ["^build"],
       "outputs": []
+    },
+    "mcp-switchboard#test": {
+      "dependsOn": ["build"],
+      "outputs": []
     }
   }
 }

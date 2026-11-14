@@ -39,11 +39,23 @@
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@hono/node-server": "^2.1.8",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "hono": "^4.13.18",
+    "jsonc-parser": "^3.3.1",
+    "quickjs-emscripten": "^0.32.0",
+    "smol-toml": "^1.9.1",
+    "zod": "^4.6.7"
+  },
   "devDependencies": {
     "@switchboard/core": "workspace:*",
     "@switchboard/shared": "workspace:*",
     "tsup": "^9.0.0",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "vitest": "^5.1.0"
+  },
+  "optionalDependencies": {
+    "@napi-rs/keyring": "^2.1.2"
   }
 }
