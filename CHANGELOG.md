@@ -4,20 +4,23 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-14
+
+Servers start as soon as they are added and restart when they crash, any MCP client can connect and wait for a profile, an opt-in activity log feeds new charts, and the web UI is rebuilt.
+
 ### Added
 
 - An opt-in activity log: `switchboard up` asks on first start, and `switchboard activity on|off` changes it. Only tool names, timing and success are kept, for `settings.retentionDays` days.
 - `GET /api/stats` and `GET`/`PUT /api/settings` for the activity charts and settings.
 - Servers with `idleTimeoutSec: 0` start with the daemon and are kept running.
 - `switchboard client connect ID --auto` and `switchboard connect` without `--profile` use the shared `/mcp` endpoint, where client rules and the default profile pick the profile.
-
 - Every MCP client that connects is remembered in `seen-clients.json`, including clients without a preset, and `GET /api/seen-clients` lists them. `PUT /api/seen-clients/:name/profile` gives one a profile.
 
 ### Changed
 
 - A client that connects to the shared `/mcp` URL without a matching rule or default profile is no longer refused: it waits with no tools, and gets its tools as soon as it is given a profile, without reconnecting.
 - Sessions whose profile comes from a client rule or the default profile follow changes to the rules.
-
+- The dashboard and the docs site share the black patch-panel logo.
 - The web UI is rebuilt with shadcn/ui: light and dark themes, a collapsible sidebar, onboarding and copy-paste connection snippets on the overview, a "Set up with AI" prompt, a clearer Clients page with an automatic (client rules) option, sticky profile previews, and charts of calls, errors and latency on the Activity page.
 
 ### Fixed
@@ -59,5 +62,6 @@ The first release.
 - OAuth sign-in for remote MCP servers, with tokens kept in the secret store.
 - The `switchboard` CLI: `up`, `stop`, `status`, `doctor`, `import`, `server`, `profile`, `default`, `rule`, `client`, `secret` and the `connect` stdio bridge.
 
-[Unreleased]: https://github.com/visveshkhanna/Switchboard/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/visveshkhanna/Switchboard/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/visveshkhanna/Switchboard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/visveshkhanna/Switchboard/releases/tag/v0.1.0
