@@ -144,6 +144,10 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
         onsessioninitialized: (id) => {
           session.id = id
           this.#sessions.set(id, session)
+          // Record the client now: some clients never send notifications/initialized.
+          if (session.client) {
+            this.deps.seen?.record(session.client.name, session.client.version, session.via, session.profile)
+          }
           this.emit('change')
         },
         onsessionclosed: (id) => this.#remove(id),

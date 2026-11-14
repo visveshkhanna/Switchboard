@@ -64,6 +64,29 @@ describe('clients without a profile', () => {
     expect(rules[0]).toEqual({ client: 'ide-one', profile: 'other' })
   })
 
+  it('records clients that never send notifications/initialized', async () => {
+    t = await startDaemon(config)
+    for (const name of ['raw-one', 'raw-two']) {
+      const res = await fetch(`${t.url}/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name, version: '1' } },
+        }),
+      })
+      expect(res.status).toBe(200)
+      await res.body?.cancel()
+    }
+    const seen = (await api('/seen-clients')).body as { name: string; waiting: number }[]
+    expect(seen.map((c) => [c.name, c.waiting]).sort()).toEqual([
+      ['raw-one', 1],
+      ['raw-two', 1],
+    ])
+  })
+
   it('remembers clients across restarts and can forget them', async () => {
     t = await startDaemon(config)
     await t.connect('/p/work/mcp', { clientName: 'remember-me' })
