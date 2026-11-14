@@ -111,5 +111,14 @@ describe('client config files', () => {
   it('makes valid server names', () => {
     expect(toSlug('My Server!')).toBe('my-server')
     expect(toSlug('___')).toBe('server-x')
+    expect(toSlug('--a_b--')).toBe('a_b')
+  })
+
+  it('handles hostile names in linear time', () => {
+    const started = performance.now()
+    expect(toSlug(`${'-'.repeat(1000)}x`)).toBe('x')
+    expect(toSlug(`a${'-'.repeat(100_000)}`)).toBe('a')
+    expect(toSlug(`${'-'.repeat(100_000)}x`)).toBe('server-x')
+    expect(performance.now() - started).toBeLessThan(200)
   })
 })

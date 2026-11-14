@@ -196,12 +196,22 @@ export interface ImportCandidate {
   server: ServerConfigInput
 }
 
+/** Remove leading and trailing `-` and `_`, without a backtracking regex. */
+function trimSeparators(text: string): string {
+  let start = 0
+  let end = text.length
+  while (start < end && (text[start] === '-' || text[start] === '_')) start++
+  while (end > start && (text[end - 1] === '-' || text[end - 1] === '_')) end--
+  return text.slice(start, end)
+}
+
 export function toSlug(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^[-_]+|[-_]+$/g, '')
-    .slice(0, 48)
+  const slug = trimSeparators(
+    name
+      .slice(0, 1024)
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-'),
+  ).slice(0, 48)
   return slugSchema.safeParse(slug).success ? slug : `server-${slug || 'x'}`.slice(0, 48)
 }
 
