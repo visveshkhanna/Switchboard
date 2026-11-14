@@ -22,6 +22,7 @@ import {
   surfaceSchema,
 } from '@switchboard/shared'
 import {
+  api,
   bold,
   cyan,
   defaultPort,
@@ -29,6 +30,7 @@ import {
   green,
   keyValues,
   list,
+  openBrowser,
   openConfig,
   paths,
   red,
@@ -158,6 +160,33 @@ export async function serverTest(name: string | undefined) {
   } finally {
     await connection.stop()
   }
+}
+
+/** Sign in to a server that uses OAuth: the daemon handles the browser callback. */
+export async function serverAuth(name: string | undefined) {
+  const server = slug(name, 'server')
+  const result = await api<{ ok: boolean; authUrl?: string; signedIn?: boolean; error?: string }>(
+    `/servers/${server}/auth`,
+    { method: 'POST' },
+  )
+  if (result.signedIn) return console.log(`${bold(server)} is already signed in.`)
+  if (!result.authUrl) throw new Error(result.error ?? 'The server did not ask for sign-in.')
+  console.log(`Opening the sign-in page for ${bold(server)}:\n${cyan(result.authUrl)}`)
+  openBrowser(result.authUrl)
+  for (let i = 0; i < 300; i++) {
+    await new Promise((r) => setTimeout(r, 1000))
+    const servers = await api<{ name: string; status?: { state: string } }[]>('/servers')
+    if (servers.find((s) => s.name === server)?.status?.state === 'ready') {
+      return console.log(green(`Signed in to ${server}.`))
+    }
+  }
+  throw new Error('Timed out waiting for sign-in.')
+}
+
+export async function serverSignOut(name: string | undefined) {
+  const server = slug(name, 'server')
+  await api(`/servers/${server}/signout`, { method: 'POST' })
+  console.log(`Signed out of ${bold(server)}.`)
 }
 
 // ── profiles ───────────────────────────────────────────────────────────────

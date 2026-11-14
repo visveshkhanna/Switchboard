@@ -128,6 +128,23 @@ export function adminApi(daemon: Daemon): Hono {
   })
   api.get('/servers/:name/tools', (c) => c.json(daemon.catalog.get(c.req.param('name'))?.tools ?? []))
   api.get('/servers/:name/logs', (c) => c.json(daemon.upstream.get(c.req.param('name'))?.stderr ?? []))
+  /** Start a sign-in for a server that uses OAuth; returns the URL to open. */
+  api.post('/servers/:name/auth', async (c) => {
+    const connection = daemon.upstream.get(c.req.param('name'))
+    if (!connection) return c.json({ error: 'Unknown server' }, 404)
+    await connection.stop()
+    await connection.sync().catch(() => undefined)
+    const status = connection.status()
+    if (status.state === 'ready') return c.json({ ok: true, signedIn: true })
+    if (status.authUrl) return c.json({ ok: true, authUrl: status.authUrl })
+    return c.json({ ok: false, error: status.lastError ?? 'The server did not ask for sign-in.' })
+  })
+  api.post('/servers/:name/signout', async (c) => {
+    const connection = daemon.upstream.get(c.req.param('name'))
+    if (!connection) return c.json({ error: 'Unknown server' }, 404)
+    await connection.signOut()
+    return c.json({ ok: true })
+  })
   api.post('/servers/:name/restart', async (c) => {
     const connection = daemon.upstream.get(c.req.param('name'))
     if (!connection) return c.json({ error: 'Unknown server' }, 404)

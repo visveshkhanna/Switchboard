@@ -23,3 +23,9 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 - The `code` tool surface: one `execute` tool runs model-written JavaScript that calls the profile's tools as typed methods, such as `await github.create_issue({...})`.
 - A QuickJS WebAssembly sandbox for code mode with no access to Node, the network or the file system, and per-profile budgets for time, memory, tool calls, code size and output size.
 - `catalog.search()` and `catalog.describe()` inside the sandbox for profiles too large to describe up front.
+- An admin API and a web UI to manage servers, profiles, client connections, secrets and live activity.
+- One-click connection of Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Codex and Gemini CLI, editing their configuration files in place with a backup.
+- Import of the MCP servers already configured in those clients.
+- Secrets referenced as `secret://name`, stored in the OS keychain when available.
+- OAuth sign-in for remote MCP servers, with tokens kept in the secret store.
+- The `switchboard` CLI: `up`, `stop`, `status`, `doctor`, `import`, `server`, `profile`, `default`, `rule`, `client`, `secret` and the `connect` stdio bridge.

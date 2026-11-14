@@ -15,7 +15,13 @@ export class UpstreamManager extends EventEmitter<ManagerEvents> {
   #syncing = new Map<string, Promise<void>>()
 
   constructor(
-    private readonly deps: { catalog: Catalog; secrets: SecretBackend; log: Logger; version: string },
+    private readonly deps: {
+      catalog: Catalog
+      secrets: SecretBackend
+      log: Logger
+      version: string
+      oauthRedirectUrl?: () => string | undefined
+    },
   ) {
     super()
   }

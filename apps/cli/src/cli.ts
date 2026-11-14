@@ -21,6 +21,7 @@ ${bold('Usage')}
   ${n} server add NAME --url URL [--sse]      Add a remote server
        [--env K=V] [--header K=V] [--cwd DIR] [--idle SECONDS]
   ${n} server ls | rm NAME | test NAME | enable NAME | disable NAME
+  ${n} server auth NAME | signout NAME       Sign in to a server that uses OAuth
 
   ${n} profile add NAME [--servers a,b] [--include s.tool] [--exclude s.tool]
        [--surface auto|passthrough|meta|code] [--description TEXT]
@@ -134,6 +135,12 @@ async function main(argv: string[]) {
           return cfg.serverRemove(a1)
         case 'test':
           return cfg.serverTest(a1)
+        case 'auth':
+        case 'login':
+          return cfg.serverAuth(a1)
+        case 'signout':
+        case 'logout':
+          return cfg.serverSignOut(a1)
         case 'enable':
           return cfg.serverEnable(a1, true)
         case 'disable':

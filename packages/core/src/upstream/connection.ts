@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -15,8 +16,9 @@ import { brand, type ServerConfig } from '@switchboard/shared'
 import type { Catalog } from '../catalog.ts'
 import type { Logger } from '../logger.ts'
 import { resolveSecretList, resolveSecrets, type SecretBackend } from '../secrets.ts'
+import { StoredOAuthProvider } from './oauth.ts'
 
-export type ConnectionState = 'stopped' | 'starting' | 'ready' | 'error'
+export type ConnectionState = 'stopped' | 'starting' | 'ready' | 'error' | 'needs-auth'
 
 export interface ConnectionStatus {
   name: string
@@ -30,6 +32,8 @@ export interface ConnectionStatus {
   toolCount?: number
   syncedAt?: string
   pid?: number
+  /** Open this to sign in, when state is `needs-auth`. */
+  authUrl?: string
 }
 
 export interface ConnectionDeps {
@@ -37,6 +41,8 @@ export interface ConnectionDeps {
   secrets: SecretBackend
   log: Logger
   version: string
+  /** The daemon's OAuth callback URL, once it is listening. */
+  oauthRedirectUrl?: () => string | undefined
 }
 
 export interface CallOptions {
@@ -75,6 +81,9 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
   #lastUsedAt?: Date
   #stopping = false
   #stderr: string[] = []
+  #oauth?: StoredOAuthProvider
+  #authUrl?: URL
+  #pendingAuth?: StreamableHTTPClientTransport | SSEClientTransport
 
   constructor(
     readonly name: string,
@@ -109,7 +118,42 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
       toolCount: entry?.tools.length,
       syncedAt: entry?.syncedAt,
       pid,
+      authUrl: this.#state === 'needs-auth' ? this.#authUrl?.toString() : undefined,
     }
+  }
+
+  get oauthState(): string | undefined {
+    return this.#pendingAuth ? this.#oauth?.state() : undefined
+  }
+
+  /** Complete a sign-in with the code from the OAuth callback, then connect. */
+  async finishAuth(code: string): Promise<void> {
+    const transport = this.#pendingAuth
+    if (!transport) throw new Error(`No sign-in in progress for ${this.name}.`)
+    await transport.finishAuth(code)
+    this.#pendingAuth = undefined
+    this.#authUrl = undefined
+    this.#retryAt = 0
+    this.#setState('stopped')
+    await this.sync()
+  }
+
+  /** Forget stored OAuth tokens and client registration. */
+  async signOut(): Promise<void> {
+    await this.stop()
+    await this.#oauthProvider().signOut()
+  }
+
+  #oauthProvider(): StoredOAuthProvider {
+    this.#oauth ??= new StoredOAuthProvider(
+      this.name,
+      this.deps.secrets,
+      () => this.deps.oauthRedirectUrl?.(),
+      (url) => {
+        this.#authUrl = url
+      },
+    )
+    return this.#oauth
   }
 
   /** Connect if needed. Concurrent callers share one attempt. */
@@ -117,6 +161,9 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
     if (!this.config.enabled) throw new Error(`Server "${this.name}" is disabled.`)
     if (this.#client && this.#state === 'ready') return this.#client
     if (this.#connecting) return this.#connecting
+    if (this.#state === 'needs-auth') {
+      throw new Error(`Server "${this.name}" needs you to sign in: ${this.#authUrl ?? 'open the web UI'}`)
+    }
     if (Date.now() < this.#retryAt) {
       const wait = Math.ceil((this.#retryAt - Date.now()) / 1000)
       throw new Error(`Server "${this.name}" failed to start (${this.#lastError}). Retrying in ${wait}s.`)
@@ -199,6 +246,7 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
     const log = this.deps.log
     try {
       const client = await this.#open()
+      this.#pendingAuth = undefined
       this.#client = client
       this.#failures = 0
       this.#retryAt = 0
@@ -209,6 +257,12 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
       this.#touch()
       return client
     } catch (error) {
+      if (error instanceof UnauthorizedError && this.#authUrl) {
+        this.#lastError = 'Sign-in required'
+        this.#setState('needs-auth')
+        log.info(`${this.name} needs sign-in: ${this.#authUrl}`)
+        throw new Error(`Server "${this.name}" needs you to sign in: ${this.#authUrl}`)
+      }
       this.#failures++
       this.#retryAt = Date.now() + Math.min(MAX_BACKOFF_MS, 500 * 2 ** this.#failures)
       this.#lastError = describeError(error, this.#stderr)
@@ -234,15 +288,26 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
     const url = new URL(config.url)
     const headers = await resolveSecrets(config.headers, this.deps.secrets)
     const requestInit = { headers }
-    if (config.transport === 'sse') return this.#handshake(new SSEClientTransport(url, { requestInit }))
+    // Servers given an Authorization header use it; the rest may use OAuth.
+    const hasAuth = Object.keys(headers).some((h) => h.toLowerCase() === 'authorization')
+    const authProvider = hasAuth || !this.deps.oauthRedirectUrl ? undefined : this.#oauthProvider()
+    const remember = <T extends StreamableHTTPClientTransport | SSEClientTransport>(t: T) => {
+      this.#pendingAuth = t
+      return t
+    }
+    if (config.transport === 'sse') {
+      return this.#handshake(remember(new SSEClientTransport(url, { requestInit, authProvider })))
+    }
     try {
-      return await this.#handshake(new StreamableHTTPClientTransport(url, { requestInit }))
+      return await this.#handshake(
+        remember(new StreamableHTTPClientTransport(url, { requestInit, authProvider })),
+      )
     } catch (error) {
       const status = (error as { code?: number }).code
       // 4xx other than auth errors means the server may only speak the older SSE transport.
-      if (status === 401 || status === 403) throw error
+      if (error instanceof UnauthorizedError || status === 401 || status === 403) throw error
       this.deps.log.debug(`${this.name}: Streamable HTTP failed, trying SSE`)
-      return this.#handshake(new SSEClientTransport(url, { requestInit }))
+      return this.#handshake(remember(new SSEClientTransport(url, { requestInit, authProvider })))
     }
   }
 

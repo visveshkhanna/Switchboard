@@ -57,6 +57,7 @@ export class Daemon {
   readonly app = new Hono()
   #server?: ServerType
   #info?: DaemonInfo
+  #onListen?: (port: number) => void
 
   private constructor(
     readonly paths: Paths,
@@ -83,7 +84,14 @@ export class Daemon {
     const config = await ConfigStore.open(paths.config, log.child('config'))
     const catalog = await Catalog.open(paths.catalog)
     const secrets = await openSecretBackend(paths.secrets, options.secretsBackend)
-    const upstream = new UpstreamManager({ catalog, secrets, log: log.child('upstream'), version })
+    let port: number | undefined
+    const upstream = new UpstreamManager({
+      catalog,
+      secrets,
+      log: log.child('upstream'),
+      version,
+      oauthRedirectUrl: () => (port ? `http://127.0.0.1:${port}/oauth/callback` : undefined),
+    })
     await upstream.apply(config.config)
     const views = new ProfileViews(() => ({ config: config.config, revision: config.revision }), catalog)
     const audit = new AuditLog(paths.audit)
@@ -108,6 +116,9 @@ export class Daemon {
       { ...options, version },
     )
     daemon.#wire()
+    daemon.#onListen = (p) => {
+      port = p
+    }
     return daemon
   }
 
@@ -132,6 +143,32 @@ export class Daemon {
     const app = this.app
     app.use('*', loopbackGuard(this.options.allowedHosts))
     app.get('/healthz', (c) => c.json({ ok: true, name: brand.name, version: this.version }))
+    app.get('/oauth/callback', async (c) => {
+      const state = c.req.query('state') ?? ''
+      const code = c.req.query('code')
+      const connection = this.upstream.list().find((s) => s.oauthState && s.oauthState === state)
+      const page = (title: string, text: string, status: 200 | 400 = 200) =>
+        c.html(
+          `<!doctype html><meta charset="utf-8"><title>${brand.displayName}</title><body style="font:16px system-ui;margin:4rem auto;max-width:32rem"><h1>${title}</h1><p>${text}</p>`,
+          status,
+        )
+      if (!connection || !code) {
+        return page(
+          'Sign-in failed',
+          escapeHtml(
+            c.req.query('error_description') ??
+              'This sign-in link is not valid any more. Start again from Switchboard.',
+          ),
+          400,
+        )
+      }
+      try {
+        await connection.finishAuth(code)
+        return page(`Signed in to ${escapeHtml(connection.name)}`, 'You can close this tab.')
+      } catch (error) {
+        return page('Sign-in failed', escapeHtml((error as Error).message), 400)
+      }
+    })
     app.route('/api', adminApi(this))
     this.options.extend?.(app, this)
     const handler = mcpHandler({ sessions: this.sessions, config: () => this.config.config, log: this.log })
@@ -155,6 +192,7 @@ export class Daemon {
       version: this.version,
       startedAt: new Date().toISOString(),
     }
+    this.#onListen?.(address.port)
     await writeJson(this.paths.pid, this.#info)
     this.config.watch()
     if (this.options.warmCatalog !== false)
@@ -174,6 +212,10 @@ export class Daemon {
     await this.audit.flush()
     await rm(this.paths.pid, { force: true })
   }
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`)
 }
 
 async function createSurfaces(gateway: Gateway): Promise<Record<ConcreteSurface, ToolSurface>> {
