@@ -4,6 +4,11 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Security
+
+- `switchboard server auth` no longer opens the sign-in URL through `cmd` on Windows, where a malicious remote server's authorization URL could run a command, and only http(s) URLs are opened, in the CLI and the web UI.
+- Server names from imported client configs are turned into slugs in linear time; a crafted name could make import slow.
+
 ## [0.2.0] - 2026-11-14
 
 Servers start as soon as they are added and restart when they crash, any MCP client can connect and wait for a profile, an opt-in activity log feeds new charts, and the web UI is rebuilt.
