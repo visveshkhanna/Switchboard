@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { brand } from '@switchboard/shared'
 
@@ -32,6 +33,10 @@ export interface ClientDef {
   /** The entry Switchboard writes. */
   entry(target: ConnectTarget): Record<string, unknown>
   docs: string
+}
+
+export function defaultClientEnv(): ClientEnv {
+  return { home: homedir(), platform: process.platform, appData: process.env.APPDATA }
 }
 
 function appSupport(env: ClientEnv, ...parts: string[]): string {

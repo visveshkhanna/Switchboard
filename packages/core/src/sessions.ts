@@ -109,10 +109,7 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
         sessionIdGenerator: randomUUID,
         onsessioninitialized: (id) => {
           session.id = id
-          const info = server.getClientVersion()
-          if (info) session.client = { name: info.name, version: info.version }
           this.#sessions.set(id, session)
-          log.info(`session ${id.slice(0, 8)} opened`, { profile, via, client: info?.name })
           this.emit('change')
         },
         onsessionclosed: (id) => this.#remove(id),
@@ -140,6 +137,12 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
       })
     })
 
+    server.oninitialized = () => {
+      const info = server.getClientVersion()
+      if (info) session.client = { name: info.name, version: info.version }
+      log.info(`session ${session.id.slice(0, 8)} opened`, { profile, via, client: info?.name })
+      this.emit('change')
+    }
     server.onclose = () => {
       if (session.id) this.#remove(session.id)
     }

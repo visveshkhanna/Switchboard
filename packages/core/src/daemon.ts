@@ -1,13 +1,12 @@
 import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
-import { homedir } from 'node:os'
 import { type ServerType, serve } from '@hono/node-server'
 import { brand } from '@switchboard/shared'
 import { Hono } from 'hono'
 import { AuditLog } from './audit.ts'
 import { Catalog } from './catalog.ts'
-import type { ClientEnv } from './clients/registry.ts'
+import { type ClientEnv, defaultClientEnv } from './clients/registry.ts'
 import { ConfigStore } from './config/store.ts'
 import { writeFileAtomic, writeJson } from './fs.ts'
 import { Gateway } from './gateway.ts'
@@ -121,9 +120,7 @@ export class Daemon {
   }
 
   get clientEnv(): ClientEnv {
-    return (
-      this.options.clientEnv ?? { home: homedir(), platform: process.platform, appData: process.env.APPDATA }
-    )
+    return this.options.clientEnv ?? defaultClientEnv()
   }
 
   #wire(): void {
