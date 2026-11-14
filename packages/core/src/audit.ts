@@ -85,6 +85,13 @@ export class AuditLog extends EventEmitter<AuditEvents> {
     return { events, source: 'file' }
   }
 
+  /** Fill the in-memory list from disk, so recent activity survives a restart. */
+  async load(): Promise<void> {
+    if (!this.persisting) return
+    const { events } = await this.since(0)
+    this.#events = [...events.slice(-this.#capacity), ...this.#events].slice(-this.#capacity)
+  }
+
   /** Drop events older than the retention period from disk. */
   async prune(): Promise<void> {
     if (!this.path) return

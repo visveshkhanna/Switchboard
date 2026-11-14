@@ -205,7 +205,10 @@ export class Daemon {
     await writeJson(this.paths.pid, this.#info)
     this.config.watch()
     for (const connection of this.upstream.list()) connection.keepAlive()
-    void this.audit.prune().catch(() => undefined)
+    void this.audit
+      .prune()
+      .then(() => this.audit.load())
+      .catch(() => undefined)
     this.#pruneTimer = setInterval(() => void this.audit.prune().catch(() => undefined), 6 * 60 * 60_000)
     this.#pruneTimer.unref()
     if (this.options.warmCatalog !== false) void this.upstream.warm()

@@ -52,6 +52,12 @@ describe('activity log', () => {
     expect(stats.body.buckets).toHaveLength(60)
     expect(stats.body.tools.map((x: any) => x.tool).sort()).toEqual(['alpha.add', 'alpha.fail'])
     expect((await api('/stats?range=1y')).status).toBe(400)
+
+    // After a restart, recent calls are read back from the file.
+    const { AuditLog } = await import('../src/audit.ts')
+    const reloaded = new AuditLog(join(t.home, 'audit.jsonl'), { persist: () => true })
+    await reloaded.load()
+    expect(reloaded.recent().map((e) => e.tool)).toEqual(['alpha.fail', 'alpha.add'])
   })
 })
 
