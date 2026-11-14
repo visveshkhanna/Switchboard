@@ -104,4 +104,4 @@ Maintainers release like this:
 
 The [release workflow](.github/workflows/release.yml) then tests on Linux, macOS and Windows, sets the package version from the tag, builds the CLI and web UI, packs and smoke-tests the npm package, attests its build provenance, publishes it to npm with provenance (`next` for pre-releases such as `v0.2.0-rc.1`) and creates the GitHub release with the changelog section as notes. The tag must have a changelog section or nothing is published.
 
-Publishing needs an `NPM_TOKEN` repository secret, or a [trusted publisher](https://docs.npmjs.com/trusted-publishers) on npmjs.com for this workflow. The docs site deploys from `main` when `CLOUDFLARE_API_TOKEN` (secret) and `CLOUDFLARE_ACCOUNT_ID` (variable) are set.
+Publishing uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers): the package trusts `.github/workflows/release.yml` in the `npm` environment, so no token is stored. The docs site is deployed by Cloudflare Workers Builds from `main`, with `apps/docs` as the root directory.

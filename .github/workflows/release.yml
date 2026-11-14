@@ -4,8 +4,9 @@ name: Release
 # provenance, and create the GitHub release with notes from CHANGELOG.md.
 # Run it by hand to build and pack without publishing anything.
 #
-# Publishing needs an NPM_TOKEN secret (an npm automation or granular
-# token), or a trusted publisher configured on npmjs.com for this workflow.
+# Publishing uses npm trusted publishing (OIDC) once it is configured on
+# npmjs.com for this workflow and the "npm" environment. Until then, an
+# NPM_TOKEN secret (a granular token) is used if present.
 on:
   push:
     tags: ["v*"]
@@ -134,6 +135,9 @@ jobs:
         with:
           name: package
           path: dist
+
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@latest
 
       - name: Publish
         env:
