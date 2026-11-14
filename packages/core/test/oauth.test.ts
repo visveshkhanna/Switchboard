@@ -6,7 +6,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { Hono } from 'hono'
 import { afterEach, describe, expect, it } from 'vitest'
-import { startDaemon, type TestDaemon } from './helpers.ts'
+import { startDaemon, type TestDaemon, waitFor } from './helpers.ts'
 
 /** A remote MCP server protected by a minimal OAuth 2.1 authorization server. */
 async function startProtectedServer(): Promise<{ base: string; server: ServerType }> {
@@ -101,6 +101,23 @@ describe('OAuth for remote servers', () => {
 
     const secrets = JSON.parse(await readFile(join(t.home, 'secrets.json'), 'utf8'))
     expect(JSON.parse(secrets['oauth.remote.tokens']).access_token).toBe('token-1')
+  })
+
+  it('waits for sign-in instead of restarting, and says how to sign in', async () => {
+    const { base, server } = await startProtectedServer()
+    remote = server
+    t = await startDaemon({
+      servers: { remote: { transport: 'http', url: `${base}/mcp`, idleTimeoutSec: 0 } },
+      profiles: { work: { servers: ['remote'], surface: 'passthrough' } },
+    })
+    const connection = t.daemon.upstream.get('remote')!
+    await waitFor(() => connection.status().state === 'needs-auth')
+    await new Promise((r) => setTimeout(r, 2500))
+    const status = connection.status()
+    expect(status).toMatchObject({ state: 'needs-auth', restarts: 0, lastError: 'Sign-in required' })
+    expect(status.nextRestartAt).toBeUndefined()
+    expect(status.authUrl).toMatch(/\/authorize\?/)
+    await expect(connection.ready()).rejects.toThrow(/Sign in to "remote" first/)
   })
 
   it('rejects callbacks with an unknown state', async () => {

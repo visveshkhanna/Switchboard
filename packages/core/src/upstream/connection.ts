@@ -64,6 +64,16 @@ const MAX_CRASHES = 5
 /** A server that ran this long before crashing is considered healthy again. */
 const HEALTHY_AFTER_MS = 60_000
 
+/** The server uses OAuth and the user has not signed in yet. Not a crash. */
+export class SignInRequiredError extends Error {
+  constructor(readonly server: string) {
+    super(
+      `Sign in to "${server}" first: open ${brand.displayName}'s web UI (Servers → ${server} → Sign in) or run \`${brand.name} server auth ${server}\`.`,
+    )
+    this.name = 'SignInRequiredError'
+  }
+}
+
 export function configHash(config: ServerConfig): string {
   return createHash('sha256').update(JSON.stringify(config)).digest('hex').slice(0, 16)
 }
@@ -156,6 +166,9 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
    * editors do for language servers. Gives up after MAX_CRASHES in a row.
    */
   #scheduleRestart(): void {
+    // Waiting for the user to sign in is not a crash: restarting would only
+    // open a new authorization request each time.
+    if (this.#state === 'needs-auth') return
     if (this.#restartTimer || this.#stopping || !this.config.enabled) return
     if (this.#crashes >= MAX_CRASHES) {
       this.#lastError = `${this.#lastError ?? 'Crashed'} (stopped restarting after ${MAX_CRASHES} crashes in a row; restart it to try again)`
@@ -217,7 +230,7 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
     if (this.#client && this.#state === 'ready') return this.#client
     if (this.#connecting) return this.#connecting
     if (this.#state === 'needs-auth') {
-      throw new Error(`Server "${this.name}" needs you to sign in: ${this.#authUrl ?? 'open the web UI'}`)
+      throw new SignInRequiredError(this.name)
     }
     if (Date.now() < this.#retryAt) {
       const wait = Math.ceil((this.#retryAt - Date.now()) / 1000)
@@ -320,7 +333,7 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
         this.#lastError = 'Sign-in required'
         this.#setState('needs-auth')
         log.info(`${this.name} needs sign-in: ${this.#authUrl}`)
-        throw new Error(`Server "${this.name}" needs you to sign in: ${this.#authUrl}`)
+        throw new SignInRequiredError(this.name)
       }
       this.#failures++
       this.#retryAt = Date.now() + Math.min(MAX_BACKOFF_MS, 500 * 2 ** this.#failures)
