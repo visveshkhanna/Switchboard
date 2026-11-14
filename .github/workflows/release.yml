@@ -151,7 +151,7 @@ jobs:
             echo "mcp-switchboard@$VERSION is already on npm"
             exit 0
           fi
-          npm publish "dist/$TARBALL" --provenance --access public --tag "$tag"
+          npm publish "./dist/$TARBALL" --provenance --access public --tag "$tag"
 
   github-release:
     name: Publish GitHub release
