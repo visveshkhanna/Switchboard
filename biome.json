@@ -14,7 +14,9 @@
       "!**/.source",
       "!**/routeTree.gen.ts",
       "!apps/docs",
-      "!**/*.md"
+      "!**/*.md",
+      "!.claude",
+      "!skills-lock.json"
     ]
   },
   "formatter": {
