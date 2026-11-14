@@ -16,7 +16,7 @@ Whatever the surface, every call is checked against the profile, so a tool outsi
 
 ## passthrough
 
-The profile's tools are listed as they are, named `server__tool`. Prompts and resources from the profile's servers are passed through as well. This is what a client would see if it connected to each server itself, with one entry instead of many.
+The profile's tools are listed as they are, named `server__tool` (or the name an [override](/docs/concepts/profiles#tool-names-clients-see) gives them). This is what a client would see if it connected to each server itself, with one entry instead of many. Only tools are passed through, not prompts or resources. The servers' own instructions are passed on in the session's `instructions`.
 
 ## meta
 
@@ -24,11 +24,11 @@ The client sees three tools instead of the full list:
 
 | Tool | Arguments | Returns |
 |---|---|---|
-| `search_tools` | `query`, optional `limit` | ranked matches, each with its name, server and a summary |
-| `get_schema` | `name` | the tool's JSON Schema and a TypeScript declaration for it |
-| `call_tool` | `name`, `arguments` | the tool's result |
+| `search_tools` | `query`, optional `limit` (default 10, at most 50) | ranked matches, one per line: `server.tool - summary` |
+| `get_schema` | `names`: up to 20 tool names | each tool's input as a TypeScript signature with its description |
+| `call_tool` | `name`, `arguments` | the tool's own result |
 
-Search runs locally, ranking matches on the tool name first, then the server, then the description. It understands `camelCase` and `snake_case` names. The tool descriptions tell the model to search before concluding that a capability is unavailable.
+Tools are named `server.tool` here, as in `github.create_issue`. A server name as the query, or `server.*`, lists that server's tools. Search runs locally (BM25), weighting the tool name above the server, title and description, and it understands `camelCase` and `snake_case` names. The tool descriptions list the profile's servers and tell the model to search before concluding that a capability is unavailable.
 
 The definitions of three tools cost the same context whether the profile has 20 tools or 500.
 
@@ -41,5 +41,7 @@ The client sees one tool, `execute`. The model writes an async JavaScript functi
 `auto` is the default. It uses `passthrough` while the profile has at most `autoThreshold` tools (40 by default) and `meta` above that. Adding servers to a profile switches it over automatically.
 
 ```json
-{ "name": "work", "servers": ["github", "linear"], "surface": "auto", "autoThreshold": 40 }
+"work": { "servers": ["github", "linear"], "surface": "auto", "autoThreshold": 40 }
 ```
+
+Set the surface with `switchboard profile set work --surface meta`, or on the profile's page in the web UI, which also estimates how many tokens of context the tool list costs compared with `passthrough`.

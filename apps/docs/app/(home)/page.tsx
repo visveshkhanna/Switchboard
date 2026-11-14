@@ -21,7 +21,7 @@ const features: { icon: ReactNode; title: string; body: string; href: string }[]
     icon: <Zap className="size-5" />,
     title: 'Instant tool lists',
     body: 'Tool catalogs are cached, so clients see their tools at once, even when no server is running.',
-    href: '/docs/concepts/tool-surfaces',
+    href: '/docs/concepts/profiles#shared-servers',
   },
   {
     icon: <Code className="size-5" />,
@@ -38,7 +38,7 @@ const features: { icon: ReactNode; title: string; body: string; href: string }[]
   {
     icon: <Lock className="size-5" />,
     title: 'Local & private',
-    body: 'Binds to loopback and keeps secrets in your OS keychain. No account, no cloud.',
+    body: 'Binds to loopback and keeps secrets in your OS keychain when available. No account, no cloud.',
     href: '/docs/security',
   },
 ];

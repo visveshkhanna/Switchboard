@@ -9,13 +9,13 @@ Switchboard is a local MCP gateway. You register your MCP servers once, group th
 npx mcp-switchboard up
 ```
 
-That starts the daemon on `http://localhost:7690` and opens its web UI, where you import the servers you already have, build profiles and connect your clients.
+That starts the daemon on `http://127.0.0.1:7690` and opens its web UI, where you import the servers you already have, build profiles and connect your clients.
 
 ```jsonc
 // ~/.cursor/mcp.json: one entry instead of one per server
 {
   "mcpServers": {
-    "switchboard": { "url": "http://localhost:7690/p/work/mcp" }
+    "switchboard": { "url": "http://127.0.0.1:7690/p/work/mcp" }
   }
 }
 ```
@@ -27,11 +27,12 @@ That starts the daemon on `http://localhost:7690` and opens its web UI, where yo
 - **Instant tool lists.** Tool catalogs are cached, so clients get their tools without waiting for servers to start.
 - **Less context.** Large profiles can be served as three search tools, or as a single `execute` tool where the model writes code that calls tools in a sandbox.
 - **Connect in one click.** Switchboard writes its entry into your client's configuration file and imports the servers you already configured there.
-- **Local and private.** It binds to `127.0.0.1`, keeps secrets in your OS keychain, and needs no account or cloud service.
+- **Local and private.** It binds to `127.0.0.1`, keeps secrets in your OS keychain when one is available, and needs no account or cloud service.
 
 <Cards>
   <Card title="Quick start" href="/docs/quick-start" description="From install to a connected client in a few minutes." />
   <Card title="Profiles" href="/docs/concepts/profiles" description="Group servers and tools for each client." />
   <Card title="Tool surfaces" href="/docs/concepts/tool-surfaces" description="Passthrough, meta, code and auto." />
   <Card title="Connect clients" href="/docs/guides/connect-clients" description="Cursor, Claude Code, VS Code and more." />
+  <Card title="Web UI" href="/docs/guides/web-ui" description="What each page of the web UI does." />
 </Cards>

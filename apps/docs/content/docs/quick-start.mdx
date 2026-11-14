@@ -14,29 +14,37 @@ import { Step, Steps } from 'fumadocs-ui/components/steps';
 npx mcp-switchboard up
 ```
 
-The daemon listens on `http://localhost:7690` and opens the web UI there.
+The daemon listens on `http://127.0.0.1:7690` and opens the web UI there. Add `-d` to run it in the background; `switchboard stop` stops it.
 
 </Step>
 <Step>
 
 ### Import or add servers
 
-Open **Import** to pull in the MCP servers already configured in Cursor, Claude Code, Claude Desktop, VS Code, Windsurf or Codex, or run:
+Open **Import** to pull in the MCP servers already configured in Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Codex or Gemini CLI, or run:
 
 ```bash
 switchboard import
 ```
 
-Add new ones on the **Servers** page, by pasting an entry from any `mcp.json` or filling in the form. **Test** starts a server once and caches its tool list. See [Importing servers](/docs/guides/import-servers).
+Add new ones on the **Servers** page, by pasting an entry from any `mcp.json` or filling in the form, or from the terminal:
+
+```bash
+switchboard server add github -- npx -y @modelcontextprotocol/server-github
+switchboard server add linear --url https://mcp.linear.app/mcp
+```
+
+**Test**, or `switchboard server test <name>`, starts a server once and caches its tool list. See [Importing servers](/docs/guides/import-servers).
 
 </Step>
 <Step>
 
 ### Create a profile
 
-On **Profiles**, create a profile, say `work`, pick its servers, and switch off any tools it should not have. The preview shows exactly what a client will see.
+On **Profiles**, create a profile, say `work`, pick its servers, and switch off any tools it should not have. The preview shows exactly what a client will see, and roughly how many tokens of context its tool list costs.
 
 ```bash
+switchboard profile add work --servers github,linear
 switchboard profile show work
 ```
 

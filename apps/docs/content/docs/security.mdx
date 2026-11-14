@@ -7,28 +7,33 @@ Switchboard runs on your machine for your own clients. Its defaults keep it that
 
 ## Local only
 
-- The daemon binds to `127.0.0.1`, so other machines on your network cannot reach it.
-- Every request's `Origin` and `Host` headers are checked, as the MCP specification requires. A web page you visit cannot use DNS rebinding to talk to the daemon through your browser.
+- The daemon binds to `127.0.0.1`, so other machines on your network cannot reach it. `switchboard up --host` changes that; only use it if you know you need to.
+- Every request's `Host` header must name a loopback address (`localhost`, `127.0.0.1` or `[::1]`), and a browser's `Origin` must be the daemon's own; anything else gets `403`. A web page you visit cannot use DNS rebinding to talk to the daemon through your browser.
 - There is no account, no cloud service and no telemetry.
 
 ## The admin API
 
-The web UI changes servers, profiles and client configurations through an admin API on the same port. Its requests must carry a token that Switchboard generates on first start and stores in `~/.switchboard/admin-token`, readable only by your user. Any process that can read that file can administer Switchboard; treat it like an SSH key.
+The web UI changes servers, profiles and client configurations through an admin API on the same port. Its requests must carry a token that Switchboard generates on first start and stores in `~/.switchboard/admin-token`, readable only by your user (mode `600`). The web UI receives it in its page, which other origins cannot read. Any process that can read that file can administer Switchboard; treat it like an SSH key.
 
 ## Secrets
 
-- API keys are stored in the OS keychain. `config.json` holds only `secret://` references. See [Secrets and OAuth](/docs/guides/secrets-and-oauth).
-- OAuth tokens are stored in the keychain too, and refreshed by the daemon.
-- Secret values are never logged and are masked in the web UI.
+- API keys stored as secrets live in the OS keychain, or in `~/.switchboard/secrets.json` (mode `600`) when no keychain is available. `config.json` holds only `secret://` references. See [Secrets and OAuth](/docs/guides/secrets-and-oauth).
+- Importing servers copies their `env` and `headers` as they are, so move any tokens into secrets afterwards.
+- OAuth tokens are kept in the same secret store, and refreshed automatically.
+- Secret values are write-only in the web UI and the admin API: they can be set, not read back.
 - Headers a client sends are not forwarded to upstream servers, so one client's credentials never reach a server by accident.
 
 ## Profiles are enforced on every call
 
 A client's profile limits more than the tool list. Every call, whether direct, through `call_tool` or from code mode, is checked against the session's profile, so a client cannot call a tool outside its profile by guessing its name. Each session has its own view, so nothing one client does changes what another sees.
 
+## Audit log
+
+Every tool call is recorded in `~/.switchboard/audit.jsonl` and shown on the web UI's **Activity** page: time, profile, client, tool, how it was called, duration and whether it failed. Arguments and results are never recorded.
+
 ## Code mode
 
-Code from the `execute` tool runs in a separate V8 isolate with a memory limit, a time limit and a cap on tool calls. It has no network, file system, `require` or `process`; tool calls are its only way out, and they pass the same profile checks. See [Code mode](/docs/concepts/code-mode#the-sandbox).
+Code from the `execute` tool runs in a QuickJS WebAssembly sandbox with a memory limit, a time limit and a cap on tool calls. It has no network, file system, `require` or `process`; tool calls are its only way out, and they pass the same profile checks. See [Code mode](/docs/concepts/code-mode#the-sandbox).
 
 ## The servers themselves
 
@@ -36,7 +41,7 @@ Switchboard starts stdio servers as your user, with the command and arguments yo
 
 ## Client configuration files
 
-Connecting a client edits its configuration file. Switchboard backs the file up first, changes only its own `switchboard` entry, and keeps every other key and comment.
+Connecting a client edits its configuration file. Switchboard backs the file up to `~/.switchboard/backups` first and changes only its own `switchboard` entry. JSON files keep every other key and comment; Codex's TOML file is rewritten, so its comments are lost. A `switchboard` entry that Switchboard did not write is never overwritten.
 
 ## Reporting a vulnerability
 

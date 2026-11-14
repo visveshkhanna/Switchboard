@@ -62,6 +62,24 @@ Each profile chooses how its tools are presented:
 | `code` | `execute`: the model writes JavaScript that calls tools in a sandbox | multi-step work across tools |
 | `auto` | `passthrough` for small profiles, `meta` above a threshold | the default |
 
+## From the terminal
+
+Everything in the web UI is also a command:
+
+```bash
+switchboard import                                   # servers from your AI clients
+switchboard server add github -- npx -y @modelcontextprotocol/server-github
+switchboard server add linear --url https://mcp.linear.app/mcp
+switchboard server auth linear                       # OAuth sign-in in the browser
+switchboard secret set github-token                  # use as secret://github-token
+switchboard profile add work --servers github,linear --surface auto
+switchboard client connect cursor --profile work
+switchboard status
+switchboard doctor
+```
+
+`config.json` in `~/.switchboard` is plain JSON that you can also edit by hand; the daemon reloads it and tells connected clients when their tools change.
+
 ## Documentation
 
 Guides and reference: **<https://switchboard.visvesh.dev>**

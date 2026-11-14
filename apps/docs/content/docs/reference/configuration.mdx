@@ -3,48 +3,46 @@ title: Configuration
 description: The format of ~/.switchboard/config.json.
 ---
 
-Switchboard keeps its configuration in `~/.switchboard/config.json` (under `SWITCHBOARD_HOME` if set). The web UI and the CLI edit this file for you; you can also edit it by hand.
+Switchboard keeps its configuration in `~/.switchboard/config.json` (under `SWITCHBOARD_HOME` if set). The web UI and the CLI edit this file for you; you can also edit it by hand. The running daemon reloads it when it changes and tells connected clients if their tools changed. An invalid edit is reported in the daemon's log and ignored, and the last valid configuration stays in use.
 
 ```json
 {
-  "servers": [
-    {
-      "name": "github",
+  "version": 1,
+  "servers": {
+    "github": {
       "transport": "stdio",
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "secret://github-token" },
-      "enabled": true,
       "idleTimeoutSec": 600
     },
-    {
-      "name": "linear",
+    "linear": {
       "transport": "http",
       "url": "https://mcp.linear.app/mcp"
     }
-  ],
-  "profiles": [
-    {
-      "name": "work",
+  },
+  "profiles": {
+    "work": {
       "servers": ["github", "linear"],
-      "tools": { "exclude": ["github.delete_repository"] },
+      "exclude": ["github.delete_repository"],
       "surface": "auto",
       "autoThreshold": 40
     },
-    {
-      "name": "personal",
+    "personal": {
       "servers": ["github"],
       "surface": "code",
-      "budgets": { "timeoutMs": 30000, "maxToolCalls": 64, "maxResultChars": 24000 }
+      "budgets": { "timeoutMs": 30000, "maxToolCalls": 64 }
     }
-  ],
+  },
   "clientRules": [
-    { "match": "cursor*", "profile": "work" },
-    { "match": "claude-code", "profile": "personal" }
+    { "client": "cursor*", "profile": "work" },
+    { "client": "claude-code", "profile": "personal" }
   ],
   "defaultProfile": "personal"
 }
 ```
+
+Server and profile names are the keys of `servers` and `profiles`. They are used in tool names and URLs, so they must be 1 to 48 characters of lowercase letters, digits, `-` and `_`, starting with a letter or digit.
 
 ## servers
 
@@ -52,51 +50,52 @@ Each server is an MCP server Switchboard can start or connect to.
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | string | unique name, used in tool names (`github.create_issue`) and profiles |
-| `transport` | `"stdio"` \| `"http"` \| `"sse"` | how to reach the server |
+| `transport` | `"stdio"` \| `"http"` \| `"sse"` | how to reach the server. `http` tries Streamable HTTP and falls back to SSE; `sse` uses SSE only |
 | `command` | string | stdio: the program to run |
-| `args` | string[] | stdio: its arguments |
-| `env` | object | stdio: extra environment variables; values may be [`secret://` references](/docs/guides/secrets-and-oauth) |
+| `args` | string[] | stdio: its arguments; may contain [`secret://` references](/docs/guides/secrets-and-oauth) |
+| `env` | object | stdio: extra environment variables, added to the daemon's own; values may contain `secret://` references |
+| `cwd` | string | stdio: the working directory |
 | `url` | string | http, sse: the server's endpoint |
-| `headers` | object | http, sse: request headers; values may be `secret://` references |
+| `headers` | object | http, sse: request headers; values may contain `secret://` references |
+| `description` | string | a note for yourself |
 | `enabled` | boolean | `false` hides the server's tools from every profile. Default `true` |
-| `idleTimeoutSec` | number | stop the server after this many seconds without a call. Default `600` |
+| `idleTimeoutSec` | number | stop the server after this many seconds without a call; `0` keeps it running. Default `600` |
+| `callTimeoutSec` | number | time limit for a single tool call. Default `120` |
 
 ## profiles
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | string | unique name, used in URLs such as `/p/work/mcp` |
+| `description` | string | shown in the web UI, and sent to clients as part of the session's instructions |
 | `servers` | string[] | servers whose tools are all included |
-| `tools.include` | string[] | extra tools, as `server.tool` or `server.*` |
-| `tools.exclude` | string[] | tools to remove, as `server.tool` or `server.*` |
-| `surface` | `"passthrough"` \| `"meta"` \| `"code"` \| `"auto"` | how tools are presented. Default `"auto"` |
+| `include` | string[] | extra tools, as `server.tool` or `server.*`; `*` is a wildcard in either part |
+| `exclude` | string[] | tools to remove, same patterns; applied last |
+| `overrides` | object | per-tool changes keyed by `server.tool`: `{ "name": "...", "description": "..." }` |
+| `surface` | `"auto"` \| `"passthrough"` \| `"meta"` \| `"code"` | how tools are presented. Default `"auto"` |
 | `autoThreshold` | number | with `auto`, the most tools served as `passthrough`. Default `40` |
 | `budgets.timeoutMs` | number | code mode: time limit per run. Default `30000` |
 | `budgets.maxToolCalls` | number | code mode: tool calls per run. Default `64` |
-| `budgets.maxResultChars` | number | code mode: result size before truncation. Default about `24000` |
+| `budgets.memoryMb` | number | code mode: sandbox memory. Default `64` |
+| `budgets.maxSourceBytes` | number | code mode: size of the code. Default `65536` |
+| `budgets.maxResultChars` | number | code mode: result size before truncation. Default `24000` |
 
-See [Profiles](/docs/concepts/profiles), [Tool surfaces](/docs/concepts/tool-surfaces) and [Code mode](/docs/concepts/code-mode).
+Every server listed in `servers` must exist. See [Profiles](/docs/concepts/profiles), [Tool surfaces](/docs/concepts/tool-surfaces) and [Code mode](/docs/concepts/code-mode).
 
 ## clientRules
 
-Rules that pick a profile from the MCP client's name, when the URL and headers do not. They are tried in order.
+Rules that pick a profile from the MCP client's name, when the URL and headers do not. They are tried in order and the first match wins.
 
 | Field | Type | Description |
 |---|---|---|
-| `match` | string | a glob matched against the client's `clientInfo.name`, as in `cursor*` |
-| `profile` | string | the profile to use |
+| `client` | string | a case-insensitive glob matched against the client's `clientInfo.name`, as in `cursor*` |
+| `profile` | string | the profile to use; it must exist |
 
 See [Profile resolution](/docs/concepts/profile-resolution).
 
 ## defaultProfile
 
-The profile for connections that nothing else assigns. Without one, such connections are refused.
+The profile for connections that nothing else assigns; it must exist. Without one, such connections are refused.
 
 ## Other files
 
-| Path | Contents |
-|---|---|
-| `~/.switchboard/admin-token` | the token for the admin API used by the web UI; see [Security](/docs/security) |
-
-Secrets and OAuth tokens are not stored in this directory but in the OS keychain.
+See [Where Switchboard keeps its files](/docs/installation#where-switchboard-keeps-its-files) for the other files in `~/.switchboard`.

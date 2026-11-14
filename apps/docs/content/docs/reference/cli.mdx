@@ -6,57 +6,90 @@ description: Every switchboard command.
 The npm package `mcp-switchboard` installs the `switchboard` command. Without a global install, prefix commands with `npx mcp-switchboard`, as in `npx mcp-switchboard up`.
 
 ```text
-switchboard up [--port <port>]                start the daemon and open the web UI
-switchboard status                            is the daemon running, and what is it serving
-switchboard doctor                            check the setup and explain what is wrong
-switchboard import                            import servers from existing client configs
+switchboard up [--port N] [--host H] [-d|--detach] [--no-open] [--log LEVEL]
+switchboard stop                                  stop a detached daemon
+switchboard status [--json]                       servers and connected clients
+switchboard doctor                                check the setup and explain problems
 
-switchboard server add                        add a server
-switchboard server ls                         list servers and their status
-switchboard server rm <name>                  remove a server
-switchboard server test <name>                start a server and refresh its tool list
+switchboard import [--client ID] [--yes]          import servers from your AI clients
+switchboard server add NAME -- COMMAND [ARGS...]  add a stdio server
+switchboard server add NAME --url URL [--sse]     add a remote server
+     [--env K=V] [--header K=V] [--cwd DIR] [--idle SECONDS]
+switchboard server ls | rm NAME | test NAME | enable NAME | disable NAME
+switchboard server auth NAME | signout NAME       OAuth sign-in and sign-out
 
-switchboard profile add <name>                create a profile
-switchboard profile ls                        list profiles
-switchboard profile rm <name>                 remove a profile
-switchboard profile show <name>               the tools a client of the profile sees
+switchboard profile add|set NAME [--servers a,b] [--include s.tool] [--exclude s.tool]
+     [--surface auto|passthrough|meta|code] [--description TEXT]
+switchboard profile ls | show NAME | rm NAME
+switchboard default PROFILE|none                  profile for clients nothing else matches
 
-switchboard client ls                         detected clients and their profiles
-switchboard client connect <client> --profile <profile>
-                                              write Switchboard into a client's config
-switchboard client disconnect <client>        remove it again
+switchboard client ls                             AI clients and their connections
+switchboard client connect ID --profile NAME [--port N]
+switchboard client disconnect ID
+switchboard rule add "CLIENT-GLOB" PROFILE        pick a profile by MCP client name
+switchboard rule ls | rm "CLIENT-GLOB"
 
-switchboard connect --profile <profile>       stdio bridge for stdio-only clients
+switchboard secret set NAME [VALUE]               store a secret (prompts if no value)
+switchboard secret ls | rm NAME
+
+switchboard connect --profile NAME                stdio bridge for stdio-only clients
 
 switchboard --version
 switchboard --help
 ```
 
-Every command accepts `--help` for its full list of options.
+`ls`, `rm`, `auth` and `signout` also answer to `list`, `remove`, `login` and `logout`.
 
 ## up
 
-Starts the daemon on `127.0.0.1`, port `7690` unless `--port` or `SWITCHBOARD_PORT` says otherwise, serves the [MCP endpoints](/docs/reference/http-api) and the web UI on that port, and opens the web UI in your browser.
+Starts the daemon on `127.0.0.1`, port `7690` unless `--port` or `SWITCHBOARD_PORT` says otherwise, serves the [MCP endpoints](/docs/reference/http-api) and the web UI on that port, and opens the web UI in your browser unless `--no-open` is given. It runs in the foreground until stopped with Ctrl+C. `--detach` (`-d`) starts it in the background instead, logging to `~/.switchboard/logs/daemon.log`. `--host` binds another address, and `--log` sets the log level (`debug`, `info`, `warn`, `error`). If the daemon is already running, `up` says so and opens the web UI.
+
+## stop
+
+Stops the running daemon.
 
 ## status
 
-Shows whether the daemon is running, its port, and the servers that are currently running.
+Shows whether the daemon is running, its version, URL and pid, the state directory and where secrets are kept, then a table of servers (`SERVER`, `STATE`, `TOOLS`, `ERROR`) and one of connected sessions (`CLIENT`, `PROFILE`, `VIA`, `SURFACE`, `LAST SEEN`). `--json` prints the same as JSON.
 
 ## doctor
 
-Checks the things that commonly go wrong and explains how to fix each one: whether the daemon is reachable, whether the port is free, whether `config.json` is valid, whether the keychain is available, and whether connected clients point at an existing profile. See [Troubleshooting](/docs/troubleshooting).
+Checks the setup and prints one line per check, `✓` for good, `!` for a warning and `✗` for a problem:
+
+- the Node.js version (24 or later);
+- the state directory, and whether other users can read it;
+- whether `config.json` is valid, with its number of servers and profiles;
+- whether the daemon is running;
+- where secrets are stored;
+- for each enabled server, whether a stdio command is on `PATH` and whether every `secret://` it references is set;
+- whether there are any profiles, and whether a default profile or client rule exists;
+- for each client, whether its configuration file can be read, which profile it is connected to, or whether it has a `switchboard` entry Switchboard did not write.
+
+It ends with `All good.` or the number of problems found, and exits with status 1 if there are any. See [Troubleshooting](/docs/troubleshooting).
 
 ## import
 
-Scans the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, Windsurf and Codex for MCP servers, and imports the ones you choose. See [Importing servers](/docs/guides/import-servers).
+Reads the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Codex and Gemini CLI, lists the MCP servers found, and asks before importing the new ones. `--client ID` limits it to one client, and `--yes` imports without asking. See [Importing servers](/docs/guides/import-servers).
 
-## server, profile
+## server
 
-Manage the `servers` and `profiles` in [`config.json`](/docs/reference/configuration) without opening the web UI. `server test` starts a server once and stores its tools in the catalog. `profile show` prints the tools a profile exposes after includes and excludes, and the [surface](/docs/concepts/tool-surfaces) it uses.
+`server add` adds or replaces a server: a stdio server from the command after `--`, or a remote one with `--url` (Streamable HTTP, falling back to SSE; `--sse` for SSE only). `--env`/`-e` and `--header`/`-H` take `KEY=VALUE` and can be repeated. `--cwd` sets a stdio server's working directory and `--idle` its idle timeout in seconds.
+
+`server ls` lists servers with their transport, target and cached tool count. `server test` starts a server, prints its tools and stores them in the catalog. `server enable` and `disable` switch a server on or off, and `server rm` removes it, and from every profile. `server auth` opens the OAuth sign-in page for a server and waits until it is signed in; `server signout` forgets its tokens. Both need the daemon running.
+
+## profile, default, rule
+
+`profile add` creates a profile, and run again (or as `profile set`) updates the fields you pass. `--servers`, `--include` and `--exclude` take comma-separated lists. `profile ls` lists profiles, `profile show` prints the tools a client of the profile sees, by server, with their exposed names, and `profile rm` removes it along with its client rules.
+
+`default` sets the [default profile](/docs/concepts/profile-resolution#default-profile), or clears it with `none`. `rule add` adds a [client rule](/docs/concepts/profile-resolution#client-rules), replacing any rule with the same pattern; `rule ls` lists them in order and `rule rm` removes one.
 
 ## client
 
-`client ls` lists the clients Switchboard supports, whether each is installed, and the profile it is connected to. `client connect` writes a `switchboard` entry into the client's MCP configuration, after backing the file up, and `client disconnect` removes it. Client names: `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex`, `gemini-cli`. See [Connecting clients](/docs/guides/connect-clients).
+`client ls` lists the supported clients, whether each is installed, the profile it is connected to, and how many other servers its configuration has. `client connect` writes a `switchboard` entry into the client's MCP configuration, after backing the file up, and `client disconnect` removes it. Client ids: `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex`, `gemini-cli`. See [Connecting clients](/docs/guides/connect-clients).
+
+## secret
+
+`secret set` stores a secret, reading the value from a hidden prompt (or stdin) when it is not given. `secret ls` lists names, never values, and `secret rm` deletes one. See [Secrets and OAuth](/docs/guides/secrets-and-oauth).
 
 ## connect
 
@@ -64,7 +97,7 @@ Manage the `servers` and `profiles` in [`config.json`](/docs/reference/configura
 switchboard connect --profile work
 ```
 
-A bridge between stdio and the daemon's HTTP endpoint, for clients that can only start MCP servers as local processes. It starts the daemon if it is not running. See [stdio bridge](/docs/guides/connect-clients#stdio-bridge).
+A bridge between stdio and the daemon's HTTP endpoint, for clients that can only start MCP servers as local processes. It starts the daemon in the background if it is not running. See [stdio bridge](/docs/guides/connect-clients#stdio-bridge).
 
 ## Environment
 
@@ -72,3 +105,5 @@ A bridge between stdio and the daemon's HTTP endpoint, for clients that can only
 |---|---|---|
 | `SWITCHBOARD_HOME` | `~/.switchboard` | the state directory |
 | `SWITCHBOARD_PORT` | `7690` | the daemon's port |
+| `SWITCHBOARD_LOG` | `info` | log level: `debug`, `info`, `warn`, `error` |
+| `SWITCHBOARD_DEBUG` | unset | print stack traces when a command fails |

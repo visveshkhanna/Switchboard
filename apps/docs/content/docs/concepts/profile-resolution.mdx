@@ -7,8 +7,8 @@ Switchboard picks the profile once, when a client opens an MCP session, and keep
 
 | # | Source | Example |
 |---|---|---|
-| 1 | **URL path** | `http://localhost:7690/p/work/mcp` |
-| 2 | **Header** | `X-Switchboard-Profile: work` on `http://localhost:7690/mcp` |
+| 1 | **URL path** | `http://127.0.0.1:7690/p/work/mcp` |
+| 2 | **Header** | `X-Switchboard-Profile: work` on `http://127.0.0.1:7690/mcp` |
 | 3 | **Client rules** | the client's name `cursor` matches the rule `cursor*` → `work` |
 | 4 | **Default profile** | `defaultProfile` in the configuration |
 
@@ -19,7 +19,7 @@ The first that applies wins.
 The most reliable choice, since every HTTP client can use a URL. One-click [Connect](/docs/guides/connect-clients) writes this form.
 
 ```text
-http://localhost:7690/p/<profile>/mcp
+http://127.0.0.1:7690/p/<profile>/mcp
 ```
 
 ## Header
@@ -28,7 +28,7 @@ Clients that let you set request headers, such as Cursor and VS Code, can use th
 
 ```json
 {
-  "url": "http://localhost:7690/mcp",
+  "url": "http://127.0.0.1:7690/mcp",
   "headers": { "X-Switchboard-Profile": "work" }
 }
 ```
@@ -39,21 +39,34 @@ When neither the path nor the header names a profile, Switchboard reads the clie
 
 ```json
 "clientRules": [
-  { "match": "cursor*", "profile": "work" },
-  { "match": "claude-code", "profile": "personal" }
+  { "client": "cursor*", "profile": "work" },
+  { "client": "claude-code", "profile": "personal" }
 ]
 ```
 
-This lets one plain `http://localhost:7690/mcp` entry serve different profiles to different clients. Rules are checked in order and the first match wins.
+`*` matches any run of characters, and matching ignores case. From the terminal:
+
+```bash
+switchboard rule add "cursor*" work
+switchboard rule ls
+switchboard rule rm "cursor*"
+```
+
+This lets one plain `http://127.0.0.1:7690/mcp` entry serve different profiles to different clients. Rules are checked in order and the first match wins.
 
 ## Default profile
 
-If nothing else applies, the session uses `defaultProfile`. Without a default profile, the connection is refused.
+If nothing else applies, the session uses `defaultProfile`. Without a default profile, the connection is refused with HTTP `400` and a JSON-RPC error explaining the four ways to choose a profile. Set or clear it with:
+
+```bash
+switchboard default work
+switchboard default none
+```
 
 ## Unknown profiles
 
-A profile name that does not exist, in the path, the header or a rule, is an error. The JSON-RPC error message lists the profiles that do exist, so the fix is easy to spot in the client's logs.
+A profile name in the path or the header that does not exist is an error: HTTP `400` with JSON-RPC error `-32602`, whose message lists the profiles that do exist, so the fix is easy to spot in the client's logs. Rules and the default profile cannot point at a missing profile: the configuration is rejected, and deleting a profile also removes its rules and clears it as the default.
 
 ## Each session is separate
 
-Every session gets its own view of its profile. Searching tools, changing a profile or another client's activity never leaks across sessions. When you edit a profile, only the sessions using it are told that their tool list changed.
+Every session gets its own view of its profile, and another client's activity never changes what it sees. When you edit a profile, or a server's tools change, only the sessions whose tool list actually changed are sent `notifications/tools/list_changed`. Sessions with no requests for six hours are closed.

@@ -9,33 +9,34 @@ Start with:
 switchboard doctor
 ```
 
-It checks the daemon, the port, the configuration, the keychain and your connected clients, and says what to change.
+It checks Node.js, the state directory, the configuration, the daemon, the secret store, each server's command and secrets, your profiles and your clients' configuration files, and says what to change.
 
 ## The client shows no tools
 
 - Check the daemon is running: `switchboard status`. Start it with `switchboard up`, or use the [stdio bridge](/docs/guides/connect-clients#stdio-bridge), which starts it for you.
 - Check the profile has tools: `switchboard profile show <profile>`.
-- A server that has never run has no tools in the catalog yet. Run `switchboard server test <name>` once.
+- A server that has never run has no tools in the catalog yet. Switchboard starts it when a client first lists tools, but if it fails to start it has none; run `switchboard server test <name>` to see why.
 - Reload or restart the client after connecting it: most clients read their MCP configuration only at start.
 
-## "Unknown profile"
+## "Unknown Switchboard profile"
 
-The URL, `X-Switchboard-Profile` header or a client rule names a profile that does not exist. The error lists the profiles that do; fix the name, or create the profile. `switchboard client ls` shows which profile each connected client uses.
+The URL or the `X-Switchboard-Profile` header names a profile that does not exist. The error lists the profiles that do; fix the name, or create the profile. `switchboard client ls` shows which profile each connected client uses.
 
-## The connection is refused without a profile
+## "No Switchboard profile for this client"
 
-A client connected to `/mcp` without a header, no client rule matched its name, and there is no `defaultProfile`. Use a `/p/<profile>/mcp` URL, add a [client rule](/docs/concepts/profile-resolution#client-rules), or set a default profile.
+A client connected to `/mcp` without a header, no client rule matched its name, and there is no `defaultProfile`. Use a `/p/<profile>/mcp` URL, add a [client rule](/docs/concepts/profile-resolution#client-rules), or set a default profile with `switchboard default <profile>`.
 
 ## Port 7690 is already in use
 
-Another program, or another Switchboard, is using the port. Run `switchboard status` to see whether it is Switchboard. To use another port, start with `switchboard up --port 7700` or set `SWITCHBOARD_PORT=7700`, then reconnect your clients so their URLs use the new port.
+`switchboard up` stops with `Port 7690 is in use.` Another program, or another Switchboard, is using the port. Run `switchboard status` to see whether it is Switchboard. To use another port, start with `switchboard up --port 7700` or set `SWITCHBOARD_PORT=7700`, then connect your clients again so their URLs use the new port.
 
 ## A server fails to start
 
-- `switchboard server test <name>` starts it and shows the error. The server's page in the web UI shows its recent stderr output.
-- A `secret://` reference without a value in the keychain stops the server from starting; set the secret on the server's page.
-- For stdio servers, check that the command works in your shell, with the same arguments. Note that the daemon may not see variables set only in your shell profile; put them in the server's `env`.
-- An OAuth server whose sign-in expired shows that in its status. Click **Connect** to sign in again.
+- `switchboard server test <name>` starts it and shows the error with the end of its stderr. The server's page in the web UI shows its recent stderr output, and `switchboard status` the last error of each server.
+- A `secret://` reference without a value stops the server from starting; set it with `switchboard secret set <name>` or on the **Secrets** page.
+- For stdio servers, `switchboard doctor` reports a command that is not on `PATH`. Check that the command works in your shell, with the same arguments. The daemon sees the environment of the shell that started it, not variables set elsewhere; put what the server needs in its `env`.
+- After a failed start, the server is retried with backoff, waiting up to 30 seconds; calls in between fail at once with the last error.
+- An OAuth server that needs sign-in shows `needs-auth` as its state. Run `switchboard server auth <name>`.
 
 ## Tool calls time out in code mode
 
@@ -47,4 +48,4 @@ With the `meta` surface, the model must search before calling. Most models do th
 
 ## Still stuck
 
-Open an issue on [GitHub](https://github.com/visveshkhanna/Switchboard/issues) with the output of `switchboard doctor`.
+Run the daemon with `switchboard up --log debug` (or `SWITCHBOARD_LOG=debug`) to see each server's stderr and every session, then open an issue on [GitHub](https://github.com/visveshkhanna/Switchboard/issues) with the output of `switchboard doctor`.

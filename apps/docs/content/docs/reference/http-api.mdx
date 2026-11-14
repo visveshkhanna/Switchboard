@@ -13,12 +13,16 @@ The daemon listens on `http://127.0.0.1:7690` by default and speaks the MCP [Str
 | `GET` | `/p/:profile/mcp` | open a server-sent event stream for notifications, such as `tools/list_changed` |
 | `DELETE` | `/p/:profile/mcp` | end the session |
 | `POST`, `GET`, `DELETE` | `/mcp` | the same, with the profile chosen by header, client rule or default |
+| `GET` | `/healthz` | `{"ok": true, "name": "switchboard", "version": "…"}` |
+| `GET` | `/oauth/callback` | where OAuth sign-ins for remote servers return |
+| | `/api/*` | the [admin API](#admin-api) |
+| `GET` | `/` and other paths | the web UI |
 
 On `/mcp`, name the profile with a header:
 
 ```http
 POST /mcp HTTP/1.1
-Host: localhost:7690
+Host: 127.0.0.1:7690
 Content-Type: application/json
 Accept: application/json, text/event-stream
 X-Switchboard-Profile: work
@@ -26,16 +30,19 @@ X-Switchboard-Profile: work
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}
 ```
 
-The reply to `initialize` carries an `Mcp-Session-Id` header. Send it with every later request of the session. The session's profile is fixed at `initialize`; see [Profile resolution](/docs/concepts/profile-resolution).
+A request without a session must be `initialize`. Its reply carries an `Mcp-Session-Id` header; send it with every later request of the session. The session's profile is fixed at `initialize`; see [Profile resolution](/docs/concepts/profile-resolution).
 
 ## Errors
 
 | Situation | Response |
 |---|---|
-| unknown profile | a JSON-RPC error listing the profiles that exist |
-| no profile and no default | a JSON-RPC error explaining how to choose one |
-| `Origin` or `Host` not local | `403`, to block DNS rebinding from web pages |
-| unknown or ended session | `404`; the client should initialize again |
+| unknown profile in the path or header | `400`, JSON-RPC error `-32602` listing the profiles that exist |
+| no profile and no default | `400`, JSON-RPC error `-32602` explaining how to choose one |
+| no session id and not an `initialize` request | `400`, JSON-RPC error `-32000` |
+| body is not valid JSON | `400`, JSON-RPC error `-32700` |
+| unknown or ended session | `404`, JSON-RPC error `-32001`; the client should initialize again |
+| session id used on another profile's path | `400` |
+| `Host` not a loopback name, or `Origin` not the daemon's own | `403`, to block DNS rebinding from web pages |
 
 ## Tools
 
@@ -45,7 +52,7 @@ What `tools/list` returns depends on the profile's [surface](/docs/concepts/tool
 |---|---|
 | `passthrough` | each allowed tool, named `server__tool` |
 | `meta` | `search_tools`, `get_schema`, `call_tool` |
-| `code` | `execute`, with `search_tools` and `get_schema` for large profiles |
+| `code` | `execute`, plus `search_tools` and `get_schema` for large profiles |
 
 ## stdio
 
@@ -53,4 +60,4 @@ For clients without HTTP support, `switchboard connect --profile <profile>` expo
 
 ## Admin API
 
-The web UI is served on the same port and manages servers, profiles and clients through an admin API. Every admin request must carry the token stored in `~/.switchboard/admin-token`. The MCP endpoints do not need it. See [Security](/docs/security).
+The web UI and parts of the CLI (`status`, `server auth`, `server signout`) manage the daemon through an admin API under `/api`. Every admin request must carry the token stored in `~/.switchboard/admin-token` as `Authorization: Bearer <token>`; without it the answer is `401`. The MCP endpoints do not need it. See [Security](/docs/security).

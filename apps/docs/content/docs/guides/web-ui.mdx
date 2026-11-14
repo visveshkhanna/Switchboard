@@ -1,0 +1,36 @@
+---
+title: Web UI
+description: What each page of the web UI at http://127.0.0.1:7690 does.
+---
+
+`switchboard up` opens the web UI at `http://127.0.0.1:7690`. It edits the same `config.json` as the CLI, through the daemon's admin API, and updates live as servers start, clients connect and tools are called.
+
+## Overview
+
+The daemon's version, port and uptime, counts of servers, profiles and active sessions, and a table of the clients connected right now: their profile, how that profile was chosen (path, header, client rule or default) and the [surface](/docs/concepts/tool-surfaces) they get.
+
+## Servers
+
+Every configured server with its transport, state and tool count. Add a server with the form, or **Paste JSON** from any `mcp.json`, including a whole `mcpServers` block. A server's page has three tabs: **settings**, its cached **tools**, and **logs** with its recent stderr output. **Test** starts it and lists its tools; **Restart** stops and starts it again. The form warns about `secret://` references whose secret is not stored yet. See [Importing servers](/docs/guides/import-servers).
+
+## Import
+
+The MCP servers found in your clients' configuration files, grouped by client. Select the ones you want, and rename them if needed, then import them in one step. Importing a server with a name that already exists replaces it. See [Importing servers](/docs/guides/import-servers#import).
+
+## Profiles
+
+Create and edit [profiles](/docs/concepts/profiles): name, description, servers, `include` and `exclude` patterns, and the surface with its threshold and code-mode budgets. Every tool of the profile's servers has a switch, which edits `include` and `exclude` for you, and **Customize** sets an [override](/docs/concepts/profiles#tool-names-clients-see) of its name or description.
+
+A live preview shows, before you save, exactly what a client of the profile will see: the surface `auto` would pick, the names clients get, and an estimate of how many tokens the tool list costs compared with `passthrough`.
+
+## Clients
+
+Each supported client, whether it is installed, and the profile it is connected to. Pick a profile and **Connect**, **Switch** or **Disconnect**; see [Connecting clients](/docs/guides/connect-clients). The page also edits the [client rules](/docs/concepts/profile-resolution#client-rules), in order, and the [default profile](/docs/concepts/profile-resolution#default-profile), and shows copyable snippets for manual setup: the profile URL, the header form and the stdio bridge.
+
+## Secrets
+
+The names of stored secrets and where they are kept (the OS keychain or the secrets file). Add or replace a secret, or delete one. Values are write-only. See [Secrets and OAuth](/docs/guides/secrets-and-oauth).
+
+## Activity
+
+The most recent tool calls, newest first: time, profile, client, tool, whether it was called directly, through `call_tool` or from code mode, duration, and any error. Filter by profile or show only errors. Arguments and results are never recorded.

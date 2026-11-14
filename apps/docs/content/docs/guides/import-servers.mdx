@@ -7,17 +7,23 @@ You probably have MCP servers configured already, spread across several clients.
 
 ## Import
 
-On the web UI's **Import** page, Switchboard scans the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, Windsurf and Codex, and lists the servers it finds, with the client each came from. Pick the ones you want and import them in one click. The same from a terminal:
+On the web UI's **Import** page, Switchboard reads the user-level configuration files of Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Codex and Gemini CLI, and lists the servers it finds, grouped by the client each came from. Pick the ones you want and import them in one click. The same from a terminal:
 
 ```bash
-switchboard import
+switchboard import                     # list what was found, then ask before importing
+switchboard import --client cursor     # only Cursor's servers
+switchboard import --yes               # import without asking
 ```
 
-Servers that appear in several clients are imported once. Importing does not change the source files; to switch a client over to Switchboard afterwards, [connect it](/docs/guides/connect-clients), which replaces nothing but its own `switchboard` entry.
+Names are turned into valid server names (lowercase letters, digits, `-` and `_`). The CLI imports only servers whose name is not taken yet, and a server found in several clients once. A server marked disabled in its client is imported disabled.
+
+Importing does not change the source files; to switch a client over to Switchboard afterwards, [connect it](/docs/guides/connect-clients), which touches nothing but its own `switchboard` entry.
+
+`env` and `headers` are copied as they are, which may mean tokens in plain text in `config.json`. Move them into [secrets](/docs/guides/secrets-and-oauth) afterwards; `switchboard import` reminds you which servers have them.
 
 ## Add a server
 
-On the **Servers** page, add a server by pasting an entry from any `mcp.json`:
+On the **Servers** page, add a server by filling in the form, or paste an entry from any `mcp.json`:
 
 ```json
 {
@@ -29,26 +35,31 @@ On the **Servers** page, add a server by pasting an entry from any `mcp.json`:
 }
 ```
 
-or by filling in the form. A server has one of three transports:
+A server has one of three transports:
 
 | Transport | Fields | For |
 |---|---|---|
-| `stdio` | `command`, `args`, `env` | local servers that Switchboard starts as a process |
-| `http` | `url`, `headers` | remote servers over Streamable HTTP |
-| `sse` | `url`, `headers` | older remote servers over HTTP+SSE |
+| `stdio` | `command`, `args`, `env`, `cwd` | local servers that Switchboard starts as a process |
+| `http` | `url`, `headers` | remote servers over Streamable HTTP, falling back to SSE |
+| `sse` | `url`, `headers` | older remote servers over HTTP+SSE only |
 
 From a terminal:
 
 ```bash
-switchboard server add       # add a server
-switchboard server ls        # list servers and their status
-switchboard server test github
+switchboard server add github -e GITHUB_PERSONAL_ACCESS_TOKEN=secret://github-token \
+  -- npx -y @modelcontextprotocol/server-github
+switchboard server add linear --url https://mcp.linear.app/mcp
+switchboard server add legacy --url https://example.com/sse --sse -H "Authorization=Bearer secret://legacy-token"
+switchboard server ls                  # servers, their targets and cached tool counts
+switchboard server disable github      # or enable
 switchboard server rm github
 ```
 
+`--env`/`-e` and `--header`/`-H` take `KEY=VALUE` and can be repeated. `--cwd DIR` sets a stdio server's working directory, and `--idle SECONDS` how long it may sit unused before it is stopped (default 600; `0` keeps it running). Adding a server with an existing name replaces it. Removing a server also removes it from every profile.
+
 ## Test a server
 
-**Test**, or `switchboard server test <name>`, starts the server, lists its tools and stores them in the catalog. Profiles can then use its tools, and clients see them at once, without the server running. The server's recent stderr output is shown on its page, which helps when it fails to start.
+**Test**, or `switchboard server test <name>`, starts the server, lists its tools and stores them in the catalog. Profiles can then use its tools, and clients see them at once, without the server running. When it fails, the error and the last lines of the server's stderr are shown; the server's page in the web UI also has its recent stderr output.
 
 ## Next
 

@@ -31,7 +31,7 @@ switchboard up
   </Tab>
 </Tabs>
 
-`switchboard up` starts the daemon and opens the web UI at `http://localhost:7690`. Check that everything is in order with:
+`switchboard up` starts the daemon in the foreground and opens the web UI at `http://127.0.0.1:7690`. Add `--detach` (`-d`) to run it in the background, and `--no-open` to skip the browser. Check that everything is in order with:
 
 ```bash
 switchboard doctor
@@ -39,14 +39,20 @@ switchboard doctor
 
 ## Where Switchboard keeps its files
 
-Everything lives in one directory, `~/.switchboard`:
+Everything lives in one directory, `~/.switchboard`, created with mode `700`:
 
 | Path | Contents |
 |---|---|
-| `~/.switchboard/config.json` | servers, profiles, client rules and the default profile ([format](/docs/reference/configuration)) |
-| `~/.switchboard/admin-token` | the token that protects the admin API used by the web UI |
+| `config.json` | servers, profiles, client rules and the default profile ([format](/docs/reference/configuration)) |
+| `catalog.json` | the cached tool list of each server |
+| `secrets.json` | secret values, only when no OS keychain is available (mode `600`) |
+| `admin-token` | the token that protects the admin API used by the web UI and CLI |
+| `audit.jsonl` | a log of tool calls, without arguments or results |
+| `daemon.json` | the running daemon's pid and port |
+| `logs/` | `daemon.log`, the output of a daemon started with `--detach` |
+| `backups/` | copies of client configuration files taken before Switchboard edits them |
 
-Secret values are not stored there: they live in your OS keychain. See [Secrets and OAuth](/docs/guides/secrets-and-oauth).
+Secret values live in your OS keychain when one is available. See [Secrets and OAuth](/docs/guides/secrets-and-oauth).
 
 ## Environment variables
 
@@ -54,6 +60,8 @@ Secret values are not stored there: they live in your OS keychain. See [Secrets 
 |---|---|---|
 | `SWITCHBOARD_HOME` | `~/.switchboard` | the state directory |
 | `SWITCHBOARD_PORT` | `7690` | the port the daemon listens on |
+| `SWITCHBOARD_LOG` | `info` | log level: `debug`, `info`, `warn` or `error` |
+| `SWITCHBOARD_DEBUG` | unset | print stack traces when a command fails |
 
 ## Uninstall
 
@@ -61,6 +69,7 @@ Disconnect your clients first, so their configuration files no longer point at S
 
 ```bash
 switchboard client disconnect cursor     # for each connected client
+switchboard stop                         # if it runs detached
 npm uninstall -g mcp-switchboard
 rm -rf ~/.switchboard
 ```
