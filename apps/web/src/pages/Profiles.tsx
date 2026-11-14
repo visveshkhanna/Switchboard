@@ -164,14 +164,14 @@ export function ProfileEditor({ name }: { name?: string }) {
   const config = useConfig()
   if (config.isPending || config.error)
     return (
-      <Page title={name ?? 'New profile'} back={<Link to="/profiles">← Profiles</Link>}>
+      <Page title={name ?? 'New profile'} parent={{ label: 'Profiles', to: '/profiles' }}>
         {config.error ? <ErrorAlert error={config.error} /> : <LoadingState />}
       </Page>
     )
   const saved = name ? config.data.profiles[name] : undefined
   if (name && !saved)
     return (
-      <Page title={name} back={<Link to="/profiles">← Profiles</Link>}>
+      <Page title={name} parent={{ label: 'Profiles', to: '/profiles' }}>
         <Empty className="border">
           <EmptyHeader>
             <EmptyTitle>No profile named “{name}”</EmptyTitle>
@@ -258,7 +258,7 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
 
   return (
     <Page
-      back={<Link to="/profiles">← Profiles</Link>}
+      parent={{ label: 'Profiles', to: '/profiles' }}
       title={isNew ? 'New profile' : name}
       description={
         isNew

@@ -23,7 +23,7 @@ import {
   Snippet,
   StatusDot,
 } from '@/components/common'
-import { ServerState, SignInButton } from '@/components/server-status'
+import { ServerState, SignInButton, SignInCard } from '@/components/server-status'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -100,12 +100,7 @@ function useToggleEnabled() {
   })
 }
 
-const BackToServers = (
-  <Link to="/servers" className="inline-flex items-center gap-1 hover:text-foreground">
-    <ArrowLeftIcon className="size-3" aria-hidden="true" />
-    Servers
-  </Link>
-)
+const SERVERS_CRUMB = { label: 'Servers', to: '/servers' }
 
 export function ServersPage() {
   const servers = useServers()
@@ -662,7 +657,7 @@ export function ServerNew() {
   })
   return (
     <Page
-      back={BackToServers}
+      parent={SERVERS_CRUMB}
       title="Add server"
       description="Describe how to start or reach the server. It starts as soon as it is saved, and its tools are discovered right away."
       footer={footer}
@@ -742,19 +737,19 @@ export function ServerDetail({ name }: { name: string }) {
 
   if (servers.isPending)
     return (
-      <Page back={BackToServers} title={name}>
+      <Page parent={SERVERS_CRUMB} title={name}>
         <LoadingState />
       </Page>
     )
   if (servers.error)
     return (
-      <Page back={BackToServers} title={name}>
+      <Page parent={SERVERS_CRUMB} title={name}>
         <ErrorAlert error={servers.error} />
       </Page>
     )
   if (!row)
     return (
-      <Page back={BackToServers} title={name}>
+      <Page parent={SERVERS_CRUMB} title={name}>
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -774,12 +769,13 @@ export function ServerDetail({ name }: { name: string }) {
 
   const wait = secondsUntil(st?.nextRestartAt)
   const enabled = row.config.enabled
+  const needsAuth = enabled && st?.state === 'needs-auth'
   const showDiscovering =
     enabled && (discovering !== null || (isDiscovering(enabled, st) && st?.state === 'starting'))
 
   return (
     <Page
-      back={BackToServers}
+      parent={SERVERS_CRUMB}
       title={name}
       description={
         <span className="flex flex-col gap-1.5">
@@ -790,14 +786,16 @@ export function ServerDetail({ name }: { name: string }) {
       footer={tab === 'settings' ? footer : undefined}
       actions={
         <>
-          <Button variant="outline" disabled={test.isPending} onClick={() => test.mutate()}>
-            {test.isPending ? (
-              <Spinner data-icon="inline-start" />
-            ) : (
-              <FlaskConicalIcon data-icon="inline-start" />
-            )}
-            Test
-          </Button>
+          {!needsAuth && (
+            <Button variant="outline" disabled={test.isPending} onClick={() => test.mutate()}>
+              {test.isPending ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <FlaskConicalIcon data-icon="inline-start" />
+              )}
+              Test
+            </Button>
+          )}
           <Button variant="outline" disabled={restart.isPending || !enabled} onClick={() => restart.mutate()}>
             {restart.isPending ? (
               <Spinner data-icon="inline-start" />
@@ -821,25 +819,29 @@ export function ServerDetail({ name }: { name: string }) {
         </>
       }
     >
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat
-          label="Tools"
-          value={
-            st?.toolCount ??
-            (isDiscovering(enabled, st) ? (
-              <span className="inline-flex items-center gap-1.5 text-sm font-normal text-muted-foreground">
-                <Spinner className="size-3.5" /> Discovering…
-              </span>
-            ) : (
-              '—'
-            ))
-          }
-        />
-        <Stat label="PID" value={st?.pid ?? '—'} />
-        <Stat label="Last used" value={relativeTime(st?.lastUsedAt)} />
-        <Stat label="Catalog synced" value={relativeTime(st?.syncedAt)} />
-        <Stat label="Restarts" value={st?.restarts ?? 0} />
-      </div>
+      {needsAuth && <SignInCard name={name} authUrl={st?.authUrl} />}
+
+      {!needsAuth && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          <Stat
+            label="Tools"
+            value={
+              st?.toolCount ??
+              (isDiscovering(enabled, st) ? (
+                <span className="inline-flex items-center gap-1.5 text-sm font-normal text-muted-foreground">
+                  <Spinner className="size-3.5" /> Discovering…
+                </span>
+              ) : (
+                '—'
+              ))
+            }
+          />
+          <Stat label="PID" value={st?.pid ?? '—'} />
+          <Stat label="Last used" value={relativeTime(st?.lastUsedAt)} />
+          <Stat label="Catalog synced" value={relativeTime(st?.syncedAt)} />
+          <Stat label="Restarts" value={st?.restarts ?? 0} />
+        </div>
+      )}
 
       {showDiscovering && (
         <Alert>
@@ -848,19 +850,6 @@ export function ServerDetail({ name }: { name: string }) {
           <AlertDescription>
             {name} is starting so Switchboard can read its tool list. This usually takes a few seconds.
           </AlertDescription>
-        </Alert>
-      )}
-
-      {enabled && st?.state === 'needs-auth' && (
-        <Alert>
-          <StatusDot tone="warning" />
-          <AlertTitle>Sign-in required</AlertTitle>
-          <AlertDescription>
-            {name} uses OAuth. Sign in once in your browser; Switchboard keeps the token and refreshes it.
-          </AlertDescription>
-          <AlertAction>
-            <SignInButton name={name} />
-          </AlertAction>
         </Alert>
       )}
 
@@ -875,7 +864,7 @@ export function ServerDetail({ name }: { name: string }) {
         </Alert>
       )}
 
-      {(test.data || test.error) && (
+      {(test.data || test.error) && !needsAuth && (
         <TestPanel result={test.data} error={test.error} onClose={() => test.reset()} />
       )}
 

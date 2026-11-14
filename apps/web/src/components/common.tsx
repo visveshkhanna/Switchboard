@@ -11,6 +11,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 import { Button } from '@/components/ui/button'
 import {
   CodeBlock,
@@ -34,44 +42,67 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { ApiError, errorMessage } from '@/lib/api'
+import { Link } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 /**
- * A page: a sticky title bar (sidebar trigger, back link, title, actions), an
- * optional description, the content, and an optional sticky footer.
+ * A page: a sticky bar with the sidebar trigger, breadcrumbs and the page's
+ * actions; the title and description at the top of the content; and an
+ * optional sticky footer for forms.
  */
 export function Page({
   title,
+  crumb,
+  parent,
   description,
   actions,
-  back,
   footer,
   children,
 }: {
   title: ReactNode
+  /** Breadcrumb text for this page, when the title is not plain text. */
+  crumb?: string
+  /** The page above this one, shown as a link in the breadcrumbs. */
+  parent?: { label: string; to: string }
   description?: ReactNode
   actions?: ReactNode
-  back?: ReactNode
   footer?: ReactNode
   children: ReactNode
 }) {
+  const current = crumb ?? (typeof title === 'string' ? title : undefined)
   return (
     <>
-      <header className="sticky top-0 z-10 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background/95 px-4 py-2 backdrop-blur supports-backdrop-filter:bg-background/80 md:px-6">
+      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80 md:px-6">
         <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="h-4 data-vertical:self-center" />
-        <div className="flex min-w-0 flex-1 flex-col">
-          {back && <div className="text-xs text-muted-foreground">{back}</div>}
-          <h1 className="truncate font-heading text-base font-semibold md:text-lg">{title}</h1>
-        </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        <Separator orientation="vertical" className="mr-1 h-4 data-vertical:self-center" />
+        <Breadcrumb className="min-w-0 flex-1">
+          <BreadcrumbList className="flex-nowrap">
+            {parent && (
+              <>
+                <BreadcrumbItem className="hidden sm:inline-flex">
+                  <BreadcrumbLink render={<Link to={parent.to} />}>{parent.label}</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden sm:inline-flex" />
+              </>
+            )}
+            {current && (
+              <BreadcrumbItem className="min-w-0">
+                <BreadcrumbPage className="truncate">{current}</BreadcrumbPage>
+              </BreadcrumbItem>
+            )}
+          </BreadcrumbList>
+        </Breadcrumb>
+        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </header>
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-6">
-        {description && <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>}
+        <div className="flex flex-col gap-1.5">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">{title}</h1>
+          {description && <div className="max-w-3xl text-sm text-muted-foreground">{description}</div>}
+        </div>
         {children}
       </div>
       {footer && (
-        <div className="sticky bottom-0 z-10 border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
+        <div className="sticky bottom-0 z-20 border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
           <div className="mx-auto flex min-h-14 w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 md:px-6">
             {footer}
           </div>

@@ -21,7 +21,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { Field, FieldContent, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { errorMessage, put } from '@/lib/api'
 import { compact, duration, plural, relativeTime, useTick } from '@/lib/format'
 import { keys, useAudit, useConfig, useSettings, useStats } from '@/lib/queries'
@@ -50,27 +50,17 @@ export function ActivityPage() {
       }
     >
       <LogSettings />
-      <div className="flex flex-wrap items-center gap-3">
-        <span id="range-label" className="text-sm font-medium">
-          Time range
-        </span>
-        <ToggleGroup
-          aria-labelledby="range-label"
-          variant="outline"
-          size="sm"
-          spacing={0}
-          value={[range]}
-          onValueChange={(v) => {
-            const next = v[0] as StatsRange | undefined
-            if (next) setRange(next)
-          }}
-        >
-          {RANGES.map((r) => (
-            <ToggleGroupItem key={r.value} value={r.value}>
-              {r.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">Usage</h2>
+        <Tabs value={range} onValueChange={(v) => setRange(v as StatsRange)}>
+          <TabsList aria-label="Time range">
+            {RANGES.map((r) => (
+              <TabsTrigger key={r.value} value={r.value} className="px-3">
+                {r.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
       <StatsSection range={range} />
       <LiveTable />
