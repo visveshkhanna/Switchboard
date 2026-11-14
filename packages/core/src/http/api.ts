@@ -261,6 +261,8 @@ export function adminApi(daemon: Daemon): Hono {
       daemon.upstream.on('status', onStatus)
       daemon.sessions.on('change', onSessions)
       daemon.config.on('change', onConfig)
+      // Send something at once so proxies and browsers see the stream is open.
+      await send('ready', { version: daemon.version })
       const keepAlive = setInterval(() => void stream.writeSSE({ event: 'ping', data: '' }), 15_000)
       await new Promise<void>((resolve) => stream.onAbort(resolve))
       clearInterval(keepAlive)

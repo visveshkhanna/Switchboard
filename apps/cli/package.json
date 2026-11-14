@@ -51,6 +51,7 @@
   "devDependencies": {
     "@switchboard/core": "workspace:*",
     "@switchboard/shared": "workspace:*",
+    "@switchboard/web": "workspace:*",
     "tsup": "^9.0.0",
     "tsx": "^4.23.15",
     "vitest": "^5.1.0"
