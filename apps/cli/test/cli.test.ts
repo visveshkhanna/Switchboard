@@ -48,8 +48,13 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  daemon?.kill()
-  await rm(root, { recursive: true, force: true })
+  // Wait for the daemon to finish its shutdown writes before removing its state.
+  if (daemon && daemon.exitCode === null) {
+    const exited = new Promise((resolve) => daemon!.once('exit', resolve))
+    daemon.kill('SIGTERM')
+    await exited
+  }
+  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 describe('switchboard CLI', () => {
