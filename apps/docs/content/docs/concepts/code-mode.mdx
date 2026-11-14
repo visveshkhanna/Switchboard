@@ -1,0 +1,62 @@
+---
+title: Code mode
+description: The execute tool, the sandbox it runs in, and its budgets.
+---
+
+With `"surface": "code"`, a profile exposes a single tool, `execute`. The model writes an **async arrow function in plain JavaScript** that calls tools and returns a result. Each server of the profile is a global object, and each of its tools a method:
+
+```js
+async () => {
+  const issues = await linear.list_issues({ assignee: 'me', state: 'In Progress' });
+  const stale = issues.filter((i) => Date.now() - Date.parse(i.updatedAt) > 7 * 864e5);
+  for (const issue of stale) {
+    await github.create_issue({
+      owner: 'acme',
+      repo: 'web',
+      title: `Follow up: ${issue.title}`,
+    });
+  }
+  return { checked: issues.length, followUps: stale.length };
+};
+```
+
+Steps that would otherwise be separate tool calls, with every intermediate result passed through the model, happen in one call.
+
+## Finding tools
+
+For small profiles, the `execute` description includes a TypeScript declaration of every tool. For large ones it would be too long, so the model discovers tools as it goes:
+
+- `search_tools` and `get_schema` are offered next to `execute`, so the model can plan first.
+- Inside the sandbox, `sb.search("create an issue")` and `sb.describe("github.create_issue")` do the same from code.
+
+## Results
+
+Tool results are unwrapped before your code sees them: structured content as an object, JSON text parsed, anything else as is. A tool that returns an error throws, so `try`/`catch` works as expected.
+
+`execute` returns the function's return value and anything written with `console.log` and friends. When it fails, the error says what kind of failure it was (`syntax`, `runtime`, `timeout` or `budget`), with a hint and the list of server namespaces available.
+
+## The sandbox
+
+Code runs in a fresh V8 isolate for every call, with a 64 MB memory limit. It has no `fetch`, `require`, `process` or file system access: the only way out is a tool call. Every tool call made from code goes through the same profile checks as a direct call, so code cannot reach a tool outside its profile. Calls still pending when the function returns are cancelled.
+
+## Budgets
+
+| Budget | Default | Profile key |
+|---|---|---|
+| Wall-clock time | 30 seconds | `budgets.timeoutMs` |
+| Tool calls per run | 64 | `budgets.maxToolCalls` |
+| Result size | about 24,000 characters | `budgets.maxResultChars` |
+| Source size | 64 KB | |
+| Size of a single value passed to or from a tool | 1 MB | |
+| Captured logs | 64 KB | |
+
+The timeout also stops tight loops such as `while (true) {}`. A result longer than `maxResultChars` is truncated structurally, keeping it valid JSON, rather than cut mid-string. Set budgets per profile in [`config.json`](/docs/reference/configuration#profiles):
+
+```json
+{
+  "name": "automation",
+  "servers": ["github", "linear"],
+  "surface": "code",
+  "budgets": { "timeoutMs": 60000, "maxToolCalls": 128, "maxResultChars": 24000 }
+}
+```

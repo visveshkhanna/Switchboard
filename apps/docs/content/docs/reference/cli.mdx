@@ -1,0 +1,74 @@
+---
+title: CLI
+description: Every switchboard command.
+---
+
+The npm package `mcp-switchboard` installs the `switchboard` command. Without a global install, prefix commands with `npx mcp-switchboard`, as in `npx mcp-switchboard up`.
+
+```text
+switchboard up [--port <port>]                start the daemon and open the web UI
+switchboard status                            is the daemon running, and what is it serving
+switchboard doctor                            check the setup and explain what is wrong
+switchboard import                            import servers from existing client configs
+
+switchboard server add                        add a server
+switchboard server ls                         list servers and their status
+switchboard server rm <name>                  remove a server
+switchboard server test <name>                start a server and refresh its tool list
+
+switchboard profile add <name>                create a profile
+switchboard profile ls                        list profiles
+switchboard profile rm <name>                 remove a profile
+switchboard profile show <name>               the tools a client of the profile sees
+
+switchboard client ls                         detected clients and their profiles
+switchboard client connect <client> --profile <profile>
+                                              write Switchboard into a client's config
+switchboard client disconnect <client>        remove it again
+
+switchboard connect --profile <profile>       stdio bridge for stdio-only clients
+
+switchboard --version
+switchboard --help
+```
+
+Every command accepts `--help` for its full list of options.
+
+## up
+
+Starts the daemon on `127.0.0.1`, port `7690` unless `--port` or `SWITCHBOARD_PORT` says otherwise, serves the [MCP endpoints](/docs/reference/http-api) and the web UI on that port, and opens the web UI in your browser.
+
+## status
+
+Shows whether the daemon is running, its port, and the servers that are currently running.
+
+## doctor
+
+Checks the things that commonly go wrong and explains how to fix each one: whether the daemon is reachable, whether the port is free, whether `config.json` is valid, whether the keychain is available, and whether connected clients point at an existing profile. See [Troubleshooting](/docs/troubleshooting).
+
+## import
+
+Scans the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, Windsurf and Codex for MCP servers, and imports the ones you choose. See [Importing servers](/docs/guides/import-servers).
+
+## server, profile
+
+Manage the `servers` and `profiles` in [`config.json`](/docs/reference/configuration) without opening the web UI. `server test` starts a server once and stores its tools in the catalog. `profile show` prints the tools a profile exposes after includes and excludes, and the [surface](/docs/concepts/tool-surfaces) it uses.
+
+## client
+
+`client ls` lists the clients Switchboard supports, whether each is installed, and the profile it is connected to. `client connect` writes a `switchboard` entry into the client's MCP configuration, after backing the file up, and `client disconnect` removes it. Client names: `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex`, `gemini-cli`. See [Connecting clients](/docs/guides/connect-clients).
+
+## connect
+
+```bash
+switchboard connect --profile work
+```
+
+A bridge between stdio and the daemon's HTTP endpoint, for clients that can only start MCP servers as local processes. It starts the daemon if it is not running. See [stdio bridge](/docs/guides/connect-clients#stdio-bridge).
+
+## Environment
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SWITCHBOARD_HOME` | `~/.switchboard` | the state directory |
+| `SWITCHBOARD_PORT` | `7690` | the daemon's port |

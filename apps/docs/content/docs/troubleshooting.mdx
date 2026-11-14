@@ -1,0 +1,50 @@
+---
+title: Troubleshooting
+description: Common problems and how to fix them.
+---
+
+Start with:
+
+```bash
+switchboard doctor
+```
+
+It checks the daemon, the port, the configuration, the keychain and your connected clients, and says what to change.
+
+## The client shows no tools
+
+- Check the daemon is running: `switchboard status`. Start it with `switchboard up`, or use the [stdio bridge](/docs/guides/connect-clients#stdio-bridge), which starts it for you.
+- Check the profile has tools: `switchboard profile show <profile>`.
+- A server that has never run has no tools in the catalog yet. Run `switchboard server test <name>` once.
+- Reload or restart the client after connecting it: most clients read their MCP configuration only at start.
+
+## "Unknown profile"
+
+The URL, `X-Switchboard-Profile` header or a client rule names a profile that does not exist. The error lists the profiles that do; fix the name, or create the profile. `switchboard client ls` shows which profile each connected client uses.
+
+## The connection is refused without a profile
+
+A client connected to `/mcp` without a header, no client rule matched its name, and there is no `defaultProfile`. Use a `/p/<profile>/mcp` URL, add a [client rule](/docs/concepts/profile-resolution#client-rules), or set a default profile.
+
+## Port 7690 is already in use
+
+Another program, or another Switchboard, is using the port. Run `switchboard status` to see whether it is Switchboard. To use another port, start with `switchboard up --port 7700` or set `SWITCHBOARD_PORT=7700`, then reconnect your clients so their URLs use the new port.
+
+## A server fails to start
+
+- `switchboard server test <name>` starts it and shows the error. The server's page in the web UI shows its recent stderr output.
+- A `secret://` reference without a value in the keychain stops the server from starting; set the secret on the server's page.
+- For stdio servers, check that the command works in your shell, with the same arguments. Note that the daemon may not see variables set only in your shell profile; put them in the server's `env`.
+- An OAuth server whose sign-in expired shows that in its status. Click **Connect** to sign in again.
+
+## Tool calls time out in code mode
+
+Code mode stops each run after 30 seconds and 64 tool calls by default. Raise `budgets.timeoutMs` or `budgets.maxToolCalls` on the profile, or have the model do less per run. See [Code mode](/docs/concepts/code-mode#budgets).
+
+## The model says a tool does not exist
+
+With the `meta` surface, the model must search before calling. Most models do this from the tool descriptions; if one does not, ask it to use `search_tools`, or use `passthrough` for that profile if it is small.
+
+## Still stuck
+
+Open an issue on [GitHub](https://github.com/visveshkhanna/Switchboard/issues) with the output of `switchboard doctor`.

@@ -1,0 +1,27 @@
+# deps
+/node_modules
+
+# generated content
+.source
+
+# test & build
+/coverage
+/.next/
+/out/
+/build
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+
+# others
+.env*.local
+.vercel
+next-env.d.ts
+# cloudflare
+.wrangler
+
+# generated from ../../CHANGELOG.md
+/content/docs/changelog.mdx

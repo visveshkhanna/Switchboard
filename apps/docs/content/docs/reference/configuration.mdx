@@ -1,0 +1,102 @@
+---
+title: Configuration
+description: The format of ~/.switchboard/config.json.
+---
+
+Switchboard keeps its configuration in `~/.switchboard/config.json` (under `SWITCHBOARD_HOME` if set). The web UI and the CLI edit this file for you; you can also edit it by hand.
+
+```json
+{
+  "servers": [
+    {
+      "name": "github",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "secret://github-token" },
+      "enabled": true,
+      "idleTimeoutSec": 600
+    },
+    {
+      "name": "linear",
+      "transport": "http",
+      "url": "https://mcp.linear.app/mcp"
+    }
+  ],
+  "profiles": [
+    {
+      "name": "work",
+      "servers": ["github", "linear"],
+      "tools": { "exclude": ["github.delete_repository"] },
+      "surface": "auto",
+      "autoThreshold": 40
+    },
+    {
+      "name": "personal",
+      "servers": ["github"],
+      "surface": "code",
+      "budgets": { "timeoutMs": 30000, "maxToolCalls": 64, "maxResultChars": 24000 }
+    }
+  ],
+  "clientRules": [
+    { "match": "cursor*", "profile": "work" },
+    { "match": "claude-code", "profile": "personal" }
+  ],
+  "defaultProfile": "personal"
+}
+```
+
+## servers
+
+Each server is an MCP server Switchboard can start or connect to.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | unique name, used in tool names (`github.create_issue`) and profiles |
+| `transport` | `"stdio"` \| `"http"` \| `"sse"` | how to reach the server |
+| `command` | string | stdio: the program to run |
+| `args` | string[] | stdio: its arguments |
+| `env` | object | stdio: extra environment variables; values may be [`secret://` references](/docs/guides/secrets-and-oauth) |
+| `url` | string | http, sse: the server's endpoint |
+| `headers` | object | http, sse: request headers; values may be `secret://` references |
+| `enabled` | boolean | `false` hides the server's tools from every profile. Default `true` |
+| `idleTimeoutSec` | number | stop the server after this many seconds without a call. Default `600` |
+
+## profiles
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | unique name, used in URLs such as `/p/work/mcp` |
+| `servers` | string[] | servers whose tools are all included |
+| `tools.include` | string[] | extra tools, as `server.tool` or `server.*` |
+| `tools.exclude` | string[] | tools to remove, as `server.tool` or `server.*` |
+| `surface` | `"passthrough"` \| `"meta"` \| `"code"` \| `"auto"` | how tools are presented. Default `"auto"` |
+| `autoThreshold` | number | with `auto`, the most tools served as `passthrough`. Default `40` |
+| `budgets.timeoutMs` | number | code mode: time limit per run. Default `30000` |
+| `budgets.maxToolCalls` | number | code mode: tool calls per run. Default `64` |
+| `budgets.maxResultChars` | number | code mode: result size before truncation. Default about `24000` |
+
+See [Profiles](/docs/concepts/profiles), [Tool surfaces](/docs/concepts/tool-surfaces) and [Code mode](/docs/concepts/code-mode).
+
+## clientRules
+
+Rules that pick a profile from the MCP client's name, when the URL and headers do not. They are tried in order.
+
+| Field | Type | Description |
+|---|---|---|
+| `match` | string | a glob matched against the client's `clientInfo.name`, as in `cursor*` |
+| `profile` | string | the profile to use |
+
+See [Profile resolution](/docs/concepts/profile-resolution).
+
+## defaultProfile
+
+The profile for connections that nothing else assigns. Without one, such connections are refused.
+
+## Other files
+
+| Path | Contents |
+|---|---|
+| `~/.switchboard/admin-token` | the token for the admin API used by the web UI; see [Security](/docs/security) |
+
+Secrets and OAuth tokens are not stored in this directory but in the OS keychain.

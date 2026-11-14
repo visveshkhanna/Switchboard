@@ -1,0 +1,55 @@
+---
+title: Importing servers
+description: Bring in the MCP servers you already configured in other clients, or add new ones.
+---
+
+You probably have MCP servers configured already, spread across several clients. Switchboard can read those configurations and register the servers once.
+
+## Import
+
+On the web UI's **Import** page, Switchboard scans the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, Windsurf and Codex, and lists the servers it finds, with the client each came from. Pick the ones you want and import them in one click. The same from a terminal:
+
+```bash
+switchboard import
+```
+
+Servers that appear in several clients are imported once. Importing does not change the source files; to switch a client over to Switchboard afterwards, [connect it](/docs/guides/connect-clients), which replaces nothing but its own `switchboard` entry.
+
+## Add a server
+
+On the **Servers** page, add a server by pasting an entry from any `mcp.json`:
+
+```json
+{
+  "github": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "secret://github-token" }
+  }
+}
+```
+
+or by filling in the form. A server has one of three transports:
+
+| Transport | Fields | For |
+|---|---|---|
+| `stdio` | `command`, `args`, `env` | local servers that Switchboard starts as a process |
+| `http` | `url`, `headers` | remote servers over Streamable HTTP |
+| `sse` | `url`, `headers` | older remote servers over HTTP+SSE |
+
+From a terminal:
+
+```bash
+switchboard server add       # add a server
+switchboard server ls        # list servers and their status
+switchboard server test github
+switchboard server rm github
+```
+
+## Test a server
+
+**Test**, or `switchboard server test <name>`, starts the server, lists its tools and stores them in the catalog. Profiles can then use its tools, and clients see them at once, without the server running. The server's recent stderr output is shown on its page, which helps when it fails to start.
+
+## Next
+
+Add the server to a [profile](/docs/concepts/profiles), and move any API keys out of plain text with [secrets](/docs/guides/secrets-and-oauth).

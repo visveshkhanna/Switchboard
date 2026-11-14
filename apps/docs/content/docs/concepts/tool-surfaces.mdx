@@ -1,0 +1,45 @@
+---
+title: Tool surfaces
+description: Passthrough, meta, code and auto, the four ways a profile presents its tools.
+---
+
+Every tool definition a client loads costs context in each request. A profile with a few tools can list them all; one with hundreds should not. Each profile's `surface` sets how its tools are presented:
+
+| Surface | What the client sees | Best for |
+|---|---|---|
+| [`passthrough`](#passthrough) | every allowed tool, as is | small profiles |
+| [`meta`](#meta) | `search_tools`, `get_schema`, `call_tool` | many tools, any model |
+| [`code`](#code) | `execute`: the model writes JavaScript that calls tools | multi-step work across tools |
+| [`auto`](#auto) | `passthrough` for small profiles, `meta` above a threshold | the default |
+
+Whatever the surface, every call is checked against the profile, so a tool outside it cannot be called by guessing its name.
+
+## passthrough
+
+The profile's tools are listed as they are, named `server__tool`. Prompts and resources from the profile's servers are passed through as well. This is what a client would see if it connected to each server itself, with one entry instead of many.
+
+## meta
+
+The client sees three tools instead of the full list:
+
+| Tool | Arguments | Returns |
+|---|---|---|
+| `search_tools` | `query`, optional `limit` | ranked matches, each with its name, server and a summary |
+| `get_schema` | `name` | the tool's JSON Schema and a TypeScript declaration for it |
+| `call_tool` | `name`, `arguments` | the tool's result |
+
+Search runs locally, ranking matches on the tool name first, then the server, then the description. It understands `camelCase` and `snake_case` names. The tool descriptions tell the model to search before concluding that a capability is unavailable.
+
+The definitions of three tools cost the same context whether the profile has 20 tools or 500.
+
+## code
+
+The client sees one tool, `execute`. The model writes an async JavaScript function that calls tools directly and returns a result; it runs in a sandbox with budgets. This turns a chain of tool calls into one round trip and keeps intermediate results out of the model's context. See [Code mode](/docs/concepts/code-mode).
+
+## auto
+
+`auto` is the default. It uses `passthrough` while the profile has at most `autoThreshold` tools (40 by default) and `meta` above that. Adding servers to a profile switches it over automatically.
+
+```json
+{ "name": "work", "servers": ["github", "linear"], "surface": "auto", "autoThreshold": 40 }
+```

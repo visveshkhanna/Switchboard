@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Switchboard: a patch panel. Clients on the left, servers on the right,
+       patch cords route each client to its profile. -->
+  <rect width="64" height="64" rx="14" fill="#0a0a0a"/>
+  <rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="none" stroke="#262626"/>
+  <g fill="none" stroke-linecap="round" stroke-width="3.5">
+    <path d="M17 18 C 34 18, 30 46, 47 46" stroke="#fafafa"/>
+    <path d="M17 46 C 34 46, 30 32, 47 32" stroke="#a3a3a3"/>
+    <path d="M17 32 C 34 32, 30 18, 47 18" stroke="#f59e0b"/>
+  </g>
+  <g fill="#0a0a0a" stroke="#fafafa" stroke-width="2.5">
+    <circle cx="17" cy="18" r="4.5"/>
+    <circle cx="17" cy="32" r="4.5"/>
+    <circle cx="17" cy="46" r="4.5"/>
+    <circle cx="47" cy="18" r="4.5"/>
+    <circle cx="47" cy="32" r="4.5"/>
+    <circle cx="47" cy="46" r="4.5"/>
+  </g>
+</svg>

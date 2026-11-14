@@ -1,0 +1,127 @@
+---
+title: Connecting clients
+description: Point Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Codex and Gemini CLI at a profile.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+## One click
+
+On the web UI's **Clients** page, Switchboard lists the clients installed on your machine. Pick a client and a profile and click **Connect**: Switchboard adds a `switchboard` entry to the client's MCP configuration. Or from a terminal:
+
+```bash
+switchboard client ls                              # detected clients and their profiles
+switchboard client connect cursor --profile work
+switchboard client disconnect cursor
+```
+
+Before writing, Switchboard backs up the file. It changes only its own entry and keeps every other key and comment. Reload or restart the client afterwards.
+
+The page also shows a snippet to copy, for clients or projects you would rather configure by hand. The snippets below are what it writes; replace `work` with your profile.
+
+## By hand
+
+<Tabs items={['Cursor', 'Claude Code', 'Claude Desktop', 'VS Code', 'Windsurf', 'Codex', 'Gemini CLI']}>
+  <Tab value="Cursor">
+
+`~/.cursor/mcp.json`, or `.cursor/mcp.json` in a project:
+
+```json
+{
+  "mcpServers": {
+    "switchboard": { "url": "http://localhost:7690/p/work/mcp" }
+  }
+}
+```
+
+  </Tab>
+  <Tab value="Claude Code">
+
+```bash
+claude mcp add --transport http switchboard http://localhost:7690/p/work/mcp
+```
+
+Add `--scope user` to use it in every project.
+
+  </Tab>
+  <Tab value="Claude Desktop">
+
+Claude Desktop starts its MCP servers as local commands, so it uses the [stdio bridge](#stdio-bridge). In `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "switchboard": {
+      "command": "npx",
+      "args": ["-y", "mcp-switchboard", "connect", "--profile", "work"]
+    }
+  }
+}
+```
+
+  </Tab>
+  <Tab value="VS Code">
+
+`mcp.json` in your user profile, or `.vscode/mcp.json` in a workspace. VS Code uses `servers`, not `mcpServers`:
+
+```json
+{
+  "servers": {
+    "switchboard": { "type": "http", "url": "http://localhost:7690/p/work/mcp" }
+  }
+}
+```
+
+  </Tab>
+  <Tab value="Windsurf">
+
+`~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "switchboard": { "serverUrl": "http://localhost:7690/p/work/mcp" }
+  }
+}
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+`~/.codex/config.toml`, through the [stdio bridge](#stdio-bridge):
+
+```toml
+[mcp_servers.switchboard]
+command = "npx"
+args = ["-y", "mcp-switchboard", "connect", "--profile", "work"]
+```
+
+  </Tab>
+  <Tab value="Gemini CLI">
+
+`~/.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "switchboard": { "httpUrl": "http://localhost:7690/p/work/mcp" }
+  }
+}
+```
+
+  </Tab>
+</Tabs>
+
+## stdio bridge
+
+Some clients can only start MCP servers as local processes speaking stdio. For them, `switchboard connect` is a small bridge: it reads MCP messages on stdin, forwards them to the daemon over HTTP, and writes the replies to stdout.
+
+```bash
+switchboard connect --profile work
+```
+
+If the daemon is not running, the bridge starts it. Configure the client to run `switchboard connect --profile <profile>`, or `npx -y mcp-switchboard connect --profile <profile>` when the package is not installed globally.
+
+## One entry, several profiles
+
+Instead of a profile in each URL, you can give every client the same `http://localhost:7690/mcp` entry and let [client rules](/docs/concepts/profile-resolution#client-rules) choose the profile by the client's name.

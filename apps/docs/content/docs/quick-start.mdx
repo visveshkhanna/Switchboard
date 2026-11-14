@@ -1,0 +1,64 @@
+---
+title: Quick start
+description: Start the daemon, import your servers, make a profile and connect a client.
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+<Steps>
+<Step>
+
+### Start Switchboard
+
+```bash
+npx mcp-switchboard up
+```
+
+The daemon listens on `http://localhost:7690` and opens the web UI there.
+
+</Step>
+<Step>
+
+### Import or add servers
+
+Open **Import** to pull in the MCP servers already configured in Cursor, Claude Code, Claude Desktop, VS Code, Windsurf or Codex, or run:
+
+```bash
+switchboard import
+```
+
+Add new ones on the **Servers** page, by pasting an entry from any `mcp.json` or filling in the form. **Test** starts a server once and caches its tool list. See [Importing servers](/docs/guides/import-servers).
+
+</Step>
+<Step>
+
+### Create a profile
+
+On **Profiles**, create a profile, say `work`, pick its servers, and switch off any tools it should not have. The preview shows exactly what a client will see.
+
+```bash
+switchboard profile show work
+```
+
+See [Profiles](/docs/concepts/profiles).
+
+</Step>
+<Step>
+
+### Connect a client
+
+On **Clients**, pick a client and a profile and click **Connect**. Switchboard writes its entry into the client's configuration file, keeping a backup. From the terminal:
+
+```bash
+switchboard client connect cursor --profile work
+```
+
+Restart or reload the client, and its tools come from the `work` profile. See [Connecting clients](/docs/guides/connect-clients).
+
+</Step>
+</Steps>
+
+## Next
+
+- Give each client its own profile: [Profile resolution](/docs/concepts/profile-resolution).
+- Profile with many tools? Try the [meta or code surface](/docs/concepts/tool-surfaces).

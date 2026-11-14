@@ -1,0 +1,66 @@
+---
+title: Installation
+description: Install Switchboard with npm. It needs Node.js 24 or later.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Switchboard is published to npm as [`mcp-switchboard`](https://www.npmjs.com/package/mcp-switchboard). The package installs one command, `switchboard`. It needs [Node.js](https://nodejs.org) 24 or later on macOS, Linux or Windows.
+
+<Tabs items={['npx', 'Global install']}>
+  <Tab value="npx">
+
+Run the latest version without installing anything:
+
+```bash
+npx mcp-switchboard up
+```
+
+Any other command works the same way, as in `npx mcp-switchboard status`.
+
+  </Tab>
+  <Tab value="Global install">
+
+Install the `switchboard` command once:
+
+```bash
+npm install -g mcp-switchboard
+switchboard up
+```
+
+  </Tab>
+</Tabs>
+
+`switchboard up` starts the daemon and opens the web UI at `http://localhost:7690`. Check that everything is in order with:
+
+```bash
+switchboard doctor
+```
+
+## Where Switchboard keeps its files
+
+Everything lives in one directory, `~/.switchboard`:
+
+| Path | Contents |
+|---|---|
+| `~/.switchboard/config.json` | servers, profiles, client rules and the default profile ([format](/docs/reference/configuration)) |
+| `~/.switchboard/admin-token` | the token that protects the admin API used by the web UI |
+
+Secret values are not stored there: they live in your OS keychain. See [Secrets and OAuth](/docs/guides/secrets-and-oauth).
+
+## Environment variables
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SWITCHBOARD_HOME` | `~/.switchboard` | the state directory |
+| `SWITCHBOARD_PORT` | `7690` | the port the daemon listens on |
+
+## Uninstall
+
+Disconnect your clients first, so their configuration files no longer point at Switchboard, then remove the package and the state directory:
+
+```bash
+switchboard client disconnect cursor     # for each connected client
+npm uninstall -g mcp-switchboard
+rm -rf ~/.switchboard
+```

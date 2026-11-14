@@ -1,0 +1,59 @@
+---
+title: Profile resolution
+description: How Switchboard decides which profile a connection uses.
+---
+
+Switchboard picks the profile once, when a client opens an MCP session, and keeps it for that session. It checks, in order:
+
+| # | Source | Example |
+|---|---|---|
+| 1 | **URL path** | `http://localhost:7690/p/work/mcp` |
+| 2 | **Header** | `X-Switchboard-Profile: work` on `http://localhost:7690/mcp` |
+| 3 | **Client rules** | the client's name `cursor` matches the rule `cursor*` → `work` |
+| 4 | **Default profile** | `defaultProfile` in the configuration |
+
+The first that applies wins.
+
+## URL path
+
+The most reliable choice, since every HTTP client can use a URL. One-click [Connect](/docs/guides/connect-clients) writes this form.
+
+```text
+http://localhost:7690/p/<profile>/mcp
+```
+
+## Header
+
+Clients that let you set request headers, such as Cursor and VS Code, can use the shared `/mcp` endpoint with a header:
+
+```json
+{
+  "url": "http://localhost:7690/mcp",
+  "headers": { "X-Switchboard-Profile": "work" }
+}
+```
+
+## Client rules
+
+When neither the path nor the header names a profile, Switchboard reads the client's name from the MCP `initialize` request (`clientInfo.name`) and tries each client rule. A rule matches the name with a glob:
+
+```json
+"clientRules": [
+  { "match": "cursor*", "profile": "work" },
+  { "match": "claude-code", "profile": "personal" }
+]
+```
+
+This lets one plain `http://localhost:7690/mcp` entry serve different profiles to different clients. Rules are checked in order and the first match wins.
+
+## Default profile
+
+If nothing else applies, the session uses `defaultProfile`. Without a default profile, the connection is refused.
+
+## Unknown profiles
+
+A profile name that does not exist, in the path, the header or a rule, is an error. The JSON-RPC error message lists the profiles that do exist, so the fix is easy to spot in the client's logs.
+
+## Each session is separate
+
+Every session gets its own view of its profile. Searching tools, changing a profile or another client's activity never leaks across sessions. When you edit a profile, only the sessions using it are told that their tool list changed.
