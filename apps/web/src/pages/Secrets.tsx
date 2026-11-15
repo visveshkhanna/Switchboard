@@ -64,7 +64,7 @@ export function SecretsPage() {
       }
     >
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_360px]">
-        <Card className="pb-0">
+        <Card className="gap-0 pb-0">
           <CardHeader className="border-b">
             <CardTitle>Stored secrets</CardTitle>
             <CardDescription>Names only; values cannot be read back.</CardDescription>
@@ -93,7 +93,7 @@ export function SecretsPage() {
           ) : (
             <ul className="divide-y">
               {secrets.data.names.map((n) => (
-                <li key={n} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <li key={n} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="flex min-w-0 flex-col">
                     <code className="truncate font-mono text-sm">{n}</code>
                     <span className="truncate font-mono text-xs text-muted-foreground">secret://{n}</span>

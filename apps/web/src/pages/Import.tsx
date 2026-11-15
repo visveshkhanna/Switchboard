@@ -133,7 +133,7 @@ export function ImportPage() {
           {groups.map(([client, items]) => {
             const all = items.every(isPicked)
             return (
-              <Card key={client} className="pb-0">
+              <Card key={client} className="gap-0 pb-0">
                 <CardHeader className="border-b">
                   <CardTitle>{clientName(client)}</CardTitle>
                   <CardDescription>{plural(items.length, 'server')}</CardDescription>
