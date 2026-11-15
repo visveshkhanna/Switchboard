@@ -4,6 +4,17 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-15
+
+One server, many accounts: a profile can run a server with its own API key or OAuth sign-in, so a work and a personal GitHub no longer mean adding GitHub twice.
+
+### Added
+
+- Per-profile credentials. A profile can give a server its own environment variables or headers, merged over the server's (`profiles.<name>.credentials`), so one server can run with a different API key or OAuth sign-in per profile instead of being added once per account. Each account runs as its own instance, `<server>.<account>`, with its own process, tool catalog and sign-in, and tool names stay `server__tool`. Profiles that name the same `account` share it. See [Credentials per profile](https://switchboard.visvesh.dev/docs/concepts/credentials).
+- `switchboard profile credentials PROFILE SERVER [--env K=V] [--header K=V] [--account NAME] [--remove]`; `server test`, `auth` and `signout` take `server.account` or `--profile`; `server ls` and `status` show accounts, and `doctor` checks the secrets they use.
+- A Credentials card in the web UI's profile editor, and an Accounts card on each server's page with sign-in, restart and errors per account.
+- `GET /api/servers` lists each server's `instances`, and the server routes accept an instance id such as `github.work`.
+
 ### Security
 
 - A hosted admin password given in `SWITCHBOARD_ADMIN_PASSWORD` is hashed with scrypt when the daemon starts and checked like a stored one, instead of being compared through a fast hash.
@@ -102,7 +113,8 @@ The first release.
 - OAuth sign-in for remote MCP servers, with tokens kept in the secret store.
 - The `switchboard` CLI: `up`, `stop`, `status`, `doctor`, `import`, `server`, `profile`, `default`, `rule`, `client`, `secret` and the `connect` stdio bridge.
 
-[Unreleased]: https://github.com/visveshkhanna/Switchboard/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/visveshkhanna/Switchboard/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/visveshkhanna/Switchboard/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/visveshkhanna/Switchboard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/visveshkhanna/Switchboard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/visveshkhanna/Switchboard/releases/tag/v0.1.0
