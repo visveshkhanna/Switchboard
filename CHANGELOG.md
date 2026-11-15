@@ -4,6 +4,10 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
+Each client now has its own profile that you switch with one click, live; Switchboard can run on a server with API keys and a login; and there is a Docker image.
+
 ### Added
 
 - Per-client profiles. Each client gets its own URL, `/c/<client>/mcp`, written into its config once (`switchboard client connect <id>`); after that its profile is switched in Switchboard (`switchboard client use <id> <profile|none|default>`) and connected sessions move at once, with no config edit or restart. Clients on the shared `/mcp` URL are identified by their MCP name and switched the same way.
@@ -19,6 +23,16 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 - `switchboard client connect <id>` writes the client's own URL instead of requiring `--profile`; `--profile` still pins a profile in the URL.
 - `/api/seen-clients` is replaced by `/api/clients`.
+- The Clients page is one list of clients with a switch per profile; glob rules move to an Advanced section.
+- The README shows the web UI.
+
+### Fixed
+
+- Hover and selection states in menus, selects and the Activity time range were invisible because two theme colours were not mapped.
+- A server waiting for OAuth sign-in is shown as such, with one Sign in card, instead of restarts and raw errors.
+- The Activity chart of calls over time no longer makes failures look like most calls; it shows stacked bars.
+- Lists inside cards on the Secrets and Import pages are evenly spaced.
+- A hosted Switchboard no longer offers to set up or import from config files on the server.
 
 ### Security
 
@@ -83,6 +97,7 @@ The first release.
 - OAuth sign-in for remote MCP servers, with tokens kept in the secret store.
 - The `switchboard` CLI: `up`, `stop`, `status`, `doctor`, `import`, `server`, `profile`, `default`, `rule`, `client`, `secret` and the `connect` stdio bridge.
 
-[Unreleased]: https://github.com/visveshkhanna/Switchboard/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/visveshkhanna/Switchboard/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/visveshkhanna/Switchboard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/visveshkhanna/Switchboard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/visveshkhanna/Switchboard/releases/tag/v0.1.0
