@@ -20,10 +20,27 @@ function rpcError(status: number, message: string, id: JsonRpcMessage['id'] = nu
  * initialize request: that is when the profile is chosen, from the path, the
  * header or the client's name. Later requests are routed by session id.
  */
-export function mcpHandler(deps: { sessions: SessionRegistry; config: () => Config; log: Logger }) {
+export function mcpHandler(deps: {
+  sessions: SessionRegistry
+  config: () => Config
+  log: Logger
+  /** Checks the Authorization header; an API key names the client. */
+  authorize?: (header: string | undefined) => { ok: true; clientId?: string } | { ok: false; message: string }
+}) {
   return async (c: Context): Promise<Response> => {
+    const auth = deps.authorize?.(c.req.header('authorization')) ?? { ok: true }
+    if (!auth.ok) {
+      return Response.json(
+        { jsonrpc: '2.0', id: null, error: { code: -32001, message: auth.message } },
+        { status: 401, headers: { 'www-authenticate': 'Bearer realm="switchboard"' } },
+      )
+    }
+    const keyClient = auth.clientId
     const pathProfile = c.req.param('profile')
     const pathClient = c.req.param('client')
+    if (keyClient && pathClient && pathClient !== keyClient) {
+      return rpcError(403, `This API key belongs to client "${keyClient}", not "${pathClient}".`)
+    }
     if (pathClient && !slugSchema.safeParse(pathClient).success) {
       return rpcError(
         400,
@@ -35,6 +52,9 @@ export function mcpHandler(deps: { sessions: SessionRegistry; config: () => Conf
     if (sessionId) {
       const session = deps.sessions.get(sessionId)
       if (!session) return rpcError(404, 'Session not found. Reconnect to start a new session.', null, -32001)
+      if (keyClient && keyClient !== session.clientId) {
+        return rpcError(403, `This session belongs to client "${session.clientId}", not to this API key.`)
+      }
       if (pathClient && pathClient !== session.clientId) {
         return rpcError(400, `This session belongs to client "${session.clientId}", not "${pathClient}".`)
       }
@@ -62,7 +82,7 @@ export function mcpHandler(deps: { sessions: SessionRegistry; config: () => Conf
       {
         path: pathProfile,
         header: c.req.header(brand.profileHeader),
-        clientId: pathClient,
+        clientId: keyClient ?? pathClient,
         clientName: init.params?.clientInfo?.name,
       },
       deps.config(),
@@ -74,7 +94,7 @@ export function mcpHandler(deps: { sessions: SessionRegistry; config: () => Conf
     }
     // A client nothing assigns a profile to is let in with no tools, and
     // shown in the web UI so the user can pick its profile.
-    const id = connectionClientId({ clientId: pathClient, clientName: clientInfo?.name })
+    const id = connectionClientId({ clientId: keyClient ?? pathClient, clientName: clientInfo?.name })
     const session = resolution.ok
       ? await deps.sessions.create(
           resolution.profile,

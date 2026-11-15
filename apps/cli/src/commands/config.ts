@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline/promises'
 import {
+  AdminPassword,
   Catalog,
   CLIENTS,
   connectClient,
@@ -7,6 +8,7 @@ import {
   disconnectClient,
   exposedToolName,
   importCandidates,
+  KeyStore,
   listClients,
   openSecretBackend,
   resolveProfile,
@@ -327,6 +329,82 @@ export async function ruleRemove(client: string | undefined) {
   const store = await openConfig()
   await store.update((c) => ({ ...c, clientRules: c.clientRules.filter((r) => r.client !== client) }))
   console.log(`Removed rule ${bold(client)}.`)
+}
+
+// ── hosting: admin password and API keys ───────────────────────────────────
+
+/** Set the password the web UI asks for when Switchboard is hosted. */
+export async function adminPasswordSet() {
+  const first = await readSecretValue('the new admin password')
+  if (first.length < 12) throw new UsageError('Use at least 12 characters.')
+  if (process.stdin.isTTY) {
+    const again = await readSecretValue('the same password again')
+    if (again !== first) throw new UsageError('The passwords do not match.')
+  }
+  const password = await AdminPassword.open(paths().adminPassword)
+  await password.set(first)
+  console.log(
+    `Admin password saved (scrypt hash in ${paths().adminPassword}). Restart ${brand.displayName} if it is running.`,
+  )
+}
+
+interface KeyRow {
+  id: string
+  client: string
+  label?: string
+  createdAt: string
+  lastUsedAt?: string
+}
+
+/** Create an API key for a client. Shown once. */
+export async function keyCreate(client: string | undefined, opts: { label?: string }) {
+  const id = slug(client, 'client')
+  const daemon = await runningDaemon()
+  let token: string
+  let url: string
+  if (daemon) {
+    const created = await api<{ token: string; url: string }>('/keys', {
+      method: 'POST',
+      body: { client: id, label: opts.label },
+    })
+    token = created.token
+    url = created.url
+  } else {
+    const store = await KeyStore.open(paths().keys)
+    token = (await store.create(id, opts.label)).token
+    url = `<your Switchboard URL>/c/${id}/mcp`
+  }
+  console.log(`API key for ${bold(id)} (shown once):\n\n  ${cyan(token)}\n`)
+  console.log(dim(`Use it from the client as a header on ${url}:`))
+  console.log(dim(`  "headers": { "Authorization": "Bearer ${token.slice(0, 12)}…" }`))
+}
+
+export async function keyList() {
+  const daemon = await runningDaemon()
+  const keys: KeyRow[] = daemon ? await api<KeyRow[]>('/keys') : (await KeyStore.open(paths().keys)).list()
+  if (!keys.length) return console.log(`No API keys. Create one with \`${brand.name} key create <client>\`.`)
+  console.log(
+    table(
+      keys.map((k) => [
+        k.id,
+        k.client,
+        k.label ?? '',
+        k.createdAt.slice(0, 10),
+        k.lastUsedAt ? k.lastUsedAt.slice(0, 16).replace('T', ' ') : dim('never'),
+      ]),
+      ['ID', 'CLIENT', 'LABEL', 'CREATED', 'LAST USED'],
+    ),
+  )
+}
+
+export async function keyRemove(id: string | undefined) {
+  if (!id) throw new UsageError('Give the key id (see `key ls`).')
+  const daemon = await runningDaemon()
+  const ok = daemon
+    ? (await api<{ ok: boolean }>(`/keys/${encodeURIComponent(id)}`, { method: 'DELETE' })).ok
+    : await (await KeyStore.open(paths().keys)).remove(id)
+  if (!ok) throw new UsageError(`No key with id "${id}".`)
+  console.log(`Revoked key ${bold(id)}.`)
 }
 
 // ── activity log ───────────────────────────────────────────────────────────

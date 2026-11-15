@@ -1,4 +1,5 @@
 export { type AuditEvent, AuditLog } from './audit.ts'
+export * from './auth.ts'
 export { Catalog, type ServerCatalog } from './catalog.ts'
 export * from './clients/files.ts'
 export * from './clients/registry.ts'

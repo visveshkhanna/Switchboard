@@ -5,12 +5,14 @@ import { type ServerType, serve } from '@hono/node-server'
 import { brand } from '@switchboard/shared'
 import { Hono } from 'hono'
 import { AuditLog } from './audit.ts'
+import { AdminPassword, AdminSessions, KEY_PREFIX, KeyStore } from './auth.ts'
 import { Catalog } from './catalog.ts'
 import { type ClientEnv, defaultClientEnv } from './clients/registry.ts'
 import { ConfigStore } from './config/store.ts'
 import { writeFileAtomic, writeJson } from './fs.ts'
 import { Gateway } from './gateway.ts'
 import { adminApi } from './http/api.ts'
+import { authRoutes } from './http/auth.ts'
 import { loopbackGuard } from './http/guard.ts'
 import { mcpHandler } from './http/mcp.ts'
 import { webUi } from './http/web.ts'
@@ -35,6 +37,14 @@ export interface DaemonOptions {
   logger?: Logger
   /** Extra Host names to accept, e.g. a LAN name when binding beyond loopback. */
   allowedHosts?: string[]
+  /**
+   * The URL Switchboard is reached at when hosted, e.g. https://sb.example.com.
+   * Setting it, or binding to a non-loopback host, turns on remote mode:
+   * MCP clients need an API key and the web UI needs the admin password.
+   */
+  publicUrl?: string
+  /** The admin password for remote mode (otherwise read from admin.json). */
+  adminPassword?: string
   /** Use the secrets file even if a keychain is available (tests). */
   secretsBackend?: 'auto' | 'file'
   /** Mount extra routes (admin API, web UI) before MCP routes. */
@@ -60,6 +70,9 @@ export class Daemon {
   #server?: ServerType
   #info?: DaemonInfo
   #onListen?: (port: number) => void
+  keys!: KeyStore
+  adminPassword!: AdminPassword
+  readonly adminSessions = new AdminSessions()
   #pruneTimer?: NodeJS.Timeout
 
   private constructor(
@@ -89,12 +102,15 @@ export class Daemon {
     const catalog = await Catalog.open(paths.catalog)
     const secrets = await openSecretBackend(paths.secrets, options.secretsBackend)
     let port: number | undefined
+    const baseUrl = () =>
+      options.publicUrl?.replace(/\/+$/, '') ??
+      `http://127.0.0.1:${port ?? options.port ?? brand.defaultPort}`
     const upstream = new UpstreamManager({
       catalog,
       secrets,
       log: log.child('upstream'),
       version,
-      oauthRedirectUrl: () => (port ? `http://127.0.0.1:${port}/oauth/callback` : undefined),
+      oauthRedirectUrl: () => (port ? `${baseUrl()}/oauth/callback` : undefined),
     })
     await upstream.apply(config.config)
     const views = new ProfileViews(() => ({ config: config.config, revision: config.revision }), catalog)
@@ -117,9 +133,11 @@ export class Daemon {
         if (r.ok) return { profile: r.profile, via: r.via }
         return { profile: null, via: r.reason === 'disabled' ? 'disabled' : 'unassigned' }
       },
-      adminUrl: () => `http://127.0.0.1:${port ?? brand.defaultPort}`,
+      adminUrl: () => baseUrl(),
     })
     const adminToken = await loadAdminToken(paths.adminToken)
+    const keys = await KeyStore.open(paths.keys)
+    const adminPassword = await AdminPassword.open(paths.adminPassword, options.adminPassword)
 
     const daemon = new Daemon(
       paths,
@@ -137,6 +155,8 @@ export class Daemon {
       log,
       { ...options, version },
     )
+    daemon.keys = keys
+    daemon.adminPassword = adminPassword
     daemon.#wire()
     daemon.#onListen = (p) => {
       port = p
@@ -168,7 +188,8 @@ export class Daemon {
     this.catalog.on('change', () => this.sessions.notifyChanges())
 
     const app = this.app
-    app.use('*', loopbackGuard(this.options.allowedHosts))
+    const publicHost = this.options.publicUrl ? new URL(this.options.publicUrl).hostname : undefined
+    app.use('*', loopbackGuard([...(this.options.allowedHosts ?? []), ...(publicHost ? [publicHost] : [])]))
     app.get('/healthz', (c) => c.json({ ok: true, name: brand.name, version: this.version }))
     app.get('/oauth/callback', async (c) => {
       const state = c.req.query('state') ?? ''
@@ -196,17 +217,67 @@ export class Daemon {
         return page('Sign-in failed', escapeHtml((error as Error).message), 400)
       }
     })
+    app.route('/auth', authRoutes(this))
     app.route('/api', adminApi(this))
     this.options.extend?.(app, this)
-    const handler = mcpHandler({ sessions: this.sessions, config: () => this.config.config, log: this.log })
+    const handler = mcpHandler({
+      sessions: this.sessions,
+      config: () => this.config.config,
+      log: this.log,
+      authorize: (header) => this.#authorizeMcp(header),
+    })
     app.all('/p/:profile/mcp', handler)
     app.all('/c/:client/mcp', handler)
     app.all('/mcp', handler)
-    if (this.options.webRoot) app.route('/', webUi(this.options.webRoot, this.adminToken))
+    // When hosted, the page carries no token: the UI logs in with the admin password.
+    if (this.options.webRoot)
+      app.route('/', webUi(this.options.webRoot, this.remote ? undefined : this.adminToken))
+  }
+
+  /** Hosted: reachable beyond this machine, so every request must authenticate. */
+  get remote(): boolean {
+    const host = this.options.host ?? brand.defaultHost
+    return !!this.options.publicUrl || !['127.0.0.1', 'localhost', '::1'].includes(host)
+  }
+
+  /** The URL clients and the web UI use to reach this daemon. */
+  get baseUrl(): string {
+    return (
+      this.options.publicUrl?.replace(/\/+$/, '') ??
+      `http://127.0.0.1:${this.#info?.port ?? this.options.port ?? brand.defaultPort}`
+    )
+  }
+
+  /**
+   * Who an MCP request is from. A valid API key names its client. Locally a
+   * key is optional; when hosted it is required.
+   */
+  #authorizeMcp(
+    header: string | undefined,
+  ): { ok: true; clientId?: string } | { ok: false; message: string } {
+    const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : undefined
+    if (token) {
+      const key = this.keys.verify(token)
+      if (key) return { ok: true, clientId: key.client }
+      if (this.remote || token.startsWith(KEY_PREFIX)) return { ok: false, message: 'Invalid API key.' }
+    }
+    if (this.remote) {
+      return {
+        ok: false,
+        message: `This ${brand.displayName} needs an API key: send "Authorization: Bearer ${KEY_PREFIX}…". Create one in the web UI or with \`${brand.name} key create <client>\`.`,
+      }
+    }
+    return { ok: true }
   }
 
   async listen(): Promise<DaemonInfo> {
     const host = this.options.host ?? brand.defaultHost
+    if (this.remote && !this.adminPassword.isSet) {
+      throw new Error(
+        `${brand.displayName} is reachable beyond this machine, so the web UI needs an admin password. ` +
+          `Set ${brand.envPrefix}ADMIN_PASSWORD, or run \`${brand.name} admin password\` first.`,
+      )
+    }
     const port = this.options.port ?? brand.defaultPort
     this.#server = await new Promise<ServerType>((resolve, reject) => {
       const server = serve({ fetch: this.app.fetch, port, hostname: host }, () => resolve(server))

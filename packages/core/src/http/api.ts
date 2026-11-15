@@ -19,6 +19,7 @@ import { resolveProfile } from '../profiles/resolve.ts'
 import { buildProfileView } from '../profiles/view.ts'
 import { computeStats, RANGES, type Range } from '../stats.ts'
 import { pickSurface } from '../surfaces/types.ts'
+import { hasAdminSession } from './auth.ts'
 
 function tokenMatches(given: string | undefined, expected: string): boolean {
   if (!given) return false
@@ -53,8 +54,16 @@ export function adminApi(daemon: Daemon): Hono {
   api.use('*', async (c, next) => {
     const header = c.req.header('authorization')
     const token = header?.startsWith('Bearer ') ? header.slice(7) : c.req.query('token')
-    if (!tokenMatches(token, daemon.adminToken)) {
-      return c.json({ error: `Missing or wrong admin token (see ${daemon.paths.adminToken}).` }, 401)
+    // The admin token (CLI, local web UI) or, when hosted, a logged-in web UI session.
+    if (!tokenMatches(token, daemon.adminToken) && !hasAdminSession(daemon, c)) {
+      return c.json(
+        {
+          error: daemon.remote
+            ? 'Log in to the web UI, or send the admin token.'
+            : `Missing or wrong admin token (see ${daemon.paths.adminToken}).`,
+        },
+        401,
+      )
     }
     await next()
   })
@@ -67,6 +76,9 @@ export function adminApi(daemon: Daemon): Hono {
     c.json({
       name: brand.name,
       version: daemon.version,
+      remote: daemon.remote,
+      baseUrl: daemon.baseUrl,
+      keys: daemon.keys.size,
       pid: process.pid,
       port: daemon.info?.port,
       startedAt: daemon.info?.startedAt,
@@ -331,7 +343,7 @@ export function adminApi(daemon: Daemon): Hono {
   })
 
   // Clients: the ones Switchboard can configure, plus every client that has connected.
-  const base = () => `http://127.0.0.1:${daemon.info?.port ?? brand.defaultPort}`
+  const base = () => daemon.baseUrl
   const clientsView = async () => {
     const cfg = config()
     const presets = await listClients(daemon.clientEnv)
@@ -469,6 +481,22 @@ export function adminApi(daemon: Daemon): Hono {
     }
     return c.json({ ok: true })
   })
+
+  // API keys: each identifies a client. Required for MCP clients when hosted.
+  api.get('/keys', (c) => c.json(daemon.keys.list()))
+  api.post('/keys', async (c) => {
+    try {
+      const { client, label } = z
+        .object({ client: slugSchema, label: z.string().max(100).optional() })
+        .parse(await c.req.json())
+      const created = await daemon.keys.create(client, label)
+      // The token is returned this once; only its hash is stored.
+      return c.json({ ...created, url: `${base()}/c/${client}/mcp` })
+    } catch (error) {
+      return problem(c, error)
+    }
+  })
+  api.delete('/keys/:id', async (c) => c.json({ ok: await daemon.keys.remove(c.req.param('id')) }))
 
   // Import servers from client configs
   api.get('/import', async (c) => {

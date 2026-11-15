@@ -18,15 +18,15 @@ const TYPES: Record<string, string> = {
  * pages on this origin can read: the loopback guard blocks other hosts, and
  * browsers do not let other origins read the response.
  */
-export function webUi(root: string, adminToken: string): Hono {
+export function webUi(root: string, adminToken: string | undefined): Hono {
   const web = new Hono()
   let indexHtml: string | undefined
 
   const index = async () => {
-    indexHtml ??= (await readFile(join(root, 'index.html'), 'utf8')).replace(
-      '</head>',
-      `<meta name="switchboard-token" content="${adminToken}"></head>`,
-    )
+    const html = await readFile(join(root, 'index.html'), 'utf8')
+    indexHtml ??= adminToken
+      ? html.replace('</head>', `<meta name="switchboard-token" content="${adminToken}"></head>`)
+      : html
     return indexHtml
   }
 

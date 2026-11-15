@@ -43,10 +43,17 @@ ${bold('Usage')}
 
   ${n} activity [on|off]                      Keep a log of tool calls for activity charts
 
+${bold('Hosting')}
+  ${n} up --host 0.0.0.0 --public-url URL     Run reachable beyond this machine
+  ${n} admin password                         Set the web UI password for hosted mode
+  ${n} key create CLIENT [--label TEXT]       API key for a client (hosted mode)
+  ${n} key ls | rm ID
+
 ${bold('Environment')}
   ${brand.envPrefix}HOME   state directory (default ~/${brand.stateDirName})
   ${brand.envPrefix}PORT   daemon port (default ${brand.defaultPort})
   ${brand.envPrefix}LOG    log level: debug, info, warn, error
+  ${brand.envPrefix}HOST, ${brand.envPrefix}PUBLIC_URL, ${brand.envPrefix}ADMIN_PASSWORD   hosted mode
 
 Docs: ${brand.docsUrl}`
 
@@ -74,6 +81,8 @@ const options = {
   surface: { type: 'string' },
   description: { type: 'string' },
   log: { type: 'string' },
+  'public-url': { type: 'string' },
+  label: { type: 'string' },
   auto: { type: 'boolean' },
 } as const
 
@@ -116,6 +125,7 @@ async function main(argv: string[]) {
       return up({
         port: o.port,
         host: o.host,
+        publicUrl: o['public-url'],
         detach: o.detach,
         open: !o['no-open'] && o.open !== false,
         log: o.log,
@@ -134,6 +144,24 @@ async function main(argv: string[]) {
       return cfg.setDefault(sub)
     case 'activity':
       return cfg.activity(sub)
+    case 'admin':
+      if (sub === 'password') return cfg.adminPasswordSet()
+      break
+    case 'key':
+    case 'keys':
+      switch (sub) {
+        case 'create':
+        case 'add':
+          return cfg.keyCreate(a1, { label: o.label })
+        case 'ls':
+        case 'list':
+        case undefined:
+          return cfg.keyList()
+        case 'rm':
+        case 'revoke':
+          return cfg.keyRemove(a1)
+      }
+      break
     case 'server':
       switch (sub) {
         case 'add':

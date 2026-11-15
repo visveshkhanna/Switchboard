@@ -48,10 +48,21 @@ async function exists(path: string) {
 export async function up(opts: {
   port?: string
   host?: string
+  publicUrl?: string
   open?: boolean
   detach?: boolean
   log?: string
 }) {
+  const host = opts.host ?? brandEnv('HOST')
+  const publicUrl = opts.publicUrl ?? brandEnv('PUBLIC_URL')
+  if (publicUrl) {
+    try {
+      const u = new URL(publicUrl)
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error()
+    } catch {
+      throw new UsageError(`--public-url must be an http(s) URL, got "${publicUrl}".`)
+    }
+  }
   const running = await runningDaemon()
   if (running) {
     console.log(`${brand.displayName} is already running at ${cyan(running.url)} (pid ${running.pid}).`)
@@ -62,7 +73,7 @@ export async function up(opts: {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new UsageError(`Invalid port "${opts.port}"`)
 
   if (opts.detach) {
-    await startDetached(port, opts.host)
+    await startDetached(port, host, publicUrl)
     const daemon = await waitForDaemon(10_000)
     if (!daemon)
       throw new Error(`${brand.displayName} did not start. See ${join(paths().logs, 'daemon.log')}.`)
@@ -75,7 +86,9 @@ export async function up(opts: {
   const root = webRoot()
   const daemon = await Daemon.create({
     port,
-    host: opts.host,
+    host,
+    publicUrl,
+    adminPassword: brandEnv('ADMIN_PASSWORD'),
     version: VERSION,
     logger: createLogger((opts.log ?? brandEnv('LOG') ?? 'info') as LogLevel),
     webRoot: root && (await exists(join(root, 'index.html'))) ? root : undefined,
@@ -89,14 +102,25 @@ export async function up(opts: {
     }
     throw error
   }
-  const url = `http://127.0.0.1:${info.port}`
-  if (process.stdout.isTTY) {
-    console.log(`\n  ${bold(brand.displayName)} ${dim(VERSION)}\n`)
+  const url = daemon.remote ? daemon.baseUrl : `http://127.0.0.1:${info.port}`
+  if (process.stdout.isTTY || daemon.remote) {
+    console.log(
+      `\n  ${bold(brand.displayName)} ${dim(VERSION)}${daemon.remote ? ` ${yellow('hosted mode')}` : ''}\n`,
+    )
     console.log(`  Web UI     ${cyan(url)}`)
-    console.log(`  Endpoint   ${cyan(`${url}/p/<profile>/mcp`)}`)
-    console.log(`  Config     ${dim(daemon.paths.config)}\n`)
+    console.log(`  Clients    ${cyan(`${url}/c/<client>/mcp`)}`)
+    console.log(`  Config     ${dim(daemon.paths.config)}`)
+    if (daemon.remote) {
+      console.log(`  Listening  ${dim(`${info.host}:${info.port}`)}`)
+      console.log(
+        dim(
+          `\n  MCP clients need an API key (${brand.name} key create <client>); the web UI asks for the admin password.`,
+        ),
+      )
+    }
+    console.log()
   }
-  if (opts.open) openBrowser(url)
+  if (opts.open && !daemon.remote) openBrowser(url)
 
   let stopping = false
   const stop = async () => {
@@ -132,12 +156,13 @@ async function askAboutActivityLog() {
   )
 }
 
-export async function startDetached(port: number, host?: string) {
+export async function startDetached(port: number, host?: string, publicUrl?: string) {
   const { logs } = paths()
   await mkdir(logs, { recursive: true })
   const log = await open(join(logs, 'daemon.log'), 'a')
   const args = [process.argv[1]!, 'up', '--no-open', '--port', String(port)]
   if (host) args.push('--host', host)
+  if (publicUrl) args.push('--public-url', publicUrl)
   const child = spawn(process.execPath, args, {
     detached: true,
     stdio: ['ignore', log.fd, log.fd],

@@ -3,6 +3,8 @@ import { readJson, writeJson } from './fs.ts'
 
 export const SECRET_PREFIX = 'secret://'
 const SECRET_REF = /secret:\/\/([A-Za-z0-9_.-]+)/g
+/** `env://NAME` reads an environment variable of the daemon, e.g. a hosting platform's secrets. */
+const ENV_REF = /env:\/\/([A-Za-z_][A-Za-z0-9_]*)/g
 
 export interface SecretBackend {
   readonly kind: string
@@ -116,9 +118,11 @@ export function secretRefs(value: string): string[] {
 export async function resolveSecrets<T extends Record<string, string>>(
   values: T,
   backend: SecretBackend,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<T> {
   const names = new Set(Object.values(values).flatMap(secretRefs))
-  if (!names.size) return values
+  const envNames = new Set(Object.values(values).flatMap((v) => [...v.matchAll(ENV_REF)].map((m) => m[1]!)))
+  if (!names.size && !envNames.size) return values
   const resolved = new Map<string, string>()
   const missing: string[] = []
   for (const name of names) {
@@ -126,10 +130,15 @@ export async function resolveSecrets<T extends Record<string, string>>(
     if (value === undefined) missing.push(name)
     else resolved.set(name, value)
   }
+  for (const name of envNames) {
+    if (env[name] === undefined) missing.push(`env://${name}`)
+  }
   if (missing.length) throw new MissingSecretError(missing)
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(values)) {
-    out[key] = value.replace(SECRET_REF, (_, name: string) => resolved.get(name)!)
+    out[key] = value
+      .replace(SECRET_REF, (_, name: string) => resolved.get(name)!)
+      .replace(ENV_REF, (_, name: string) => env[name]!)
   }
   return out as T
 }
