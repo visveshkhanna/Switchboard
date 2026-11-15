@@ -18,10 +18,13 @@ import {
 } from '@switchboard/core'
 import {
   brand,
+  instanceFor,
   matchToolPattern,
+  parseInstanceId,
   profileSchema,
   type ServerConfigInput,
   serverConfigSchema,
+  serverInstances,
   slugSchema,
   surfaceSchema,
 } from '@switchboard/shared'
@@ -51,6 +54,32 @@ function slug(value: string | undefined, what: string): string {
   const result = slugSchema.safeParse(value)
   if (!result.success)
     throw new UsageError(`Invalid ${what} name "${value}": ${result.error.issues[0]?.message}`)
+  return value
+}
+
+/**
+ * A server instance from the command line: `github`, `github.work` for an
+ * account, or `github --profile work` for the account that profile uses.
+ */
+function instanceArg(
+  value: string | undefined,
+  config: { servers: Record<string, unknown> } & Parameters<typeof instanceFor>[0],
+  profile?: string,
+): string {
+  if (!value) throw new UsageError('Missing server name.')
+  const { server, account } = parseInstanceId(value)
+  slug(server, 'server')
+  if (account) slug(account, 'account')
+  if (!config.servers[server]) throw new UsageError(`No server named "${server}".`)
+  if (profile && !account) {
+    if (!config.profiles[slug(profile, 'profile')]) throw new UsageError(`No profile named "${profile}".`)
+    return instanceFor(config, profile, server)
+  }
+  if (account && !serverInstances(config).some((i) => i.id === value)) {
+    throw new UsageError(
+      `No account "${account}" for ${server}. Give a profile credentials first: ${brand.name} profile credentials PROFILE ${server} --env KEY=secret://NAME`,
+    )
+  }
   return value
 }
 
@@ -97,16 +126,22 @@ export async function serverAdd(
 export async function serverList() {
   const store = await openConfig()
   const catalog = await Catalog.open(paths().catalog)
-  const rows = Object.entries(store.config.servers).map(([name, s]) => [
-    name,
-    s.transport,
-    s.transport === 'stdio' ? [s.command, ...s.args].join(' ') : s.url,
-    String(catalog.get(name)?.tools.length ?? '-'),
-    s.enabled ? '' : dim('disabled'),
-  ])
+  const instances = serverInstances(store.config)
+  const rows = Object.entries(store.config.servers).map(([name, s]) => {
+    const own = instances.filter((i) => i.server === name)
+    const accounts = own.flatMap((i) => (i.account ? [i.account] : []))
+    return [
+      name,
+      s.transport,
+      s.transport === 'stdio' ? [s.command, ...s.args].join(' ') : s.url,
+      String(own.map((i) => catalog.get(i.id)?.tools.length).find((n) => n !== undefined) ?? '-'),
+      accounts.join(', ') || dim('-'),
+      s.enabled ? '' : dim('disabled'),
+    ]
+  })
   if (!rows.length)
     return console.log(`No servers. Add one with \`${brand.name} server add\` or \`${brand.name} import\`.`)
-  console.log(table(rows, ['NAME', 'TRANSPORT', 'TARGET', 'TOOLS', '']))
+  console.log(table(rows, ['NAME', 'TRANSPORT', 'TARGET', 'TOOLS', 'ACCOUNTS', '']))
 }
 
 export async function serverRemove(name: string | undefined) {
@@ -115,7 +150,10 @@ export async function serverRemove(name: string | undefined) {
   if (!store.config.servers[server]) throw new UsageError(`No server named "${server}".`)
   await store.update((c) => {
     delete c.servers[server]
-    for (const p of Object.values(c.profiles)) p.servers = p.servers.filter((s) => s !== server)
+    for (const p of Object.values(c.profiles)) {
+      p.servers = p.servers.filter((s) => s !== server)
+      delete p.credentials[server]
+    }
     return c
   })
   console.log(`Removed server ${bold(server)}.`)
@@ -132,12 +170,13 @@ export async function serverEnable(name: string | undefined, enabled: boolean) {
   console.log(`${enabled ? 'Enabled' : 'Disabled'} server ${bold(server)}.`)
 }
 
-/** Start the server here, list its tools, stop it. */
-export async function serverTest(name: string | undefined) {
-  const server = slug(name, 'server')
+/** Start the server (or one account of it) here, list its tools, stop it. */
+export async function serverTest(name: string | undefined, opts: { profile?: string } = {}) {
   const store = await openConfig()
-  const config = store.config.servers[server]
-  if (!config) throw new UsageError(`No server named "${server}".`)
+  const server = instanceArg(name, store.config, opts.profile)
+  const config =
+    serverInstances(store.config).find((i) => i.id === server)?.config ??
+    store.config.servers[parseInstanceId(server).server]!
   const catalog = await Catalog.open(paths().catalog)
   const connection = new UpstreamConnection(
     server,
@@ -168,8 +207,8 @@ export async function serverTest(name: string | undefined) {
 }
 
 /** Sign in to a server that uses OAuth: the daemon handles the browser callback. */
-export async function serverAuth(name: string | undefined) {
-  const server = slug(name, 'server')
+export async function serverAuth(name: string | undefined, opts: { profile?: string } = {}) {
+  const server = instanceArg(name, (await openConfig()).config, opts.profile)
   const result = await api<{ ok: boolean; authUrl?: string; signedIn?: boolean; error?: string }>(
     `/servers/${server}/auth`,
     { method: 'POST' },
@@ -183,21 +222,83 @@ export async function serverAuth(name: string | undefined) {
   openBrowser(authUrl)
   for (let i = 0; i < 300; i++) {
     await new Promise((r) => setTimeout(r, 1000))
-    const servers = await api<{ name: string; status?: { state: string } }[]>('/servers')
-    if (servers.find((s) => s.name === server)?.status?.state === 'ready') {
+    const servers = await api<{ instances?: { id: string; status?: { state: string } }[] }[]>('/servers')
+    if (servers.flatMap((s) => s.instances ?? []).find((i) => i.id === server)?.status?.state === 'ready') {
       return console.log(green(`Signed in to ${server}.`))
     }
   }
   throw new Error('Timed out waiting for sign-in.')
 }
 
-export async function serverSignOut(name: string | undefined) {
-  const server = slug(name, 'server')
+export async function serverSignOut(name: string | undefined, opts: { profile?: string } = {}) {
+  const server = instanceArg(name, (await openConfig()).config, opts.profile)
   await api(`/servers/${server}/signout`, { method: 'POST' })
   console.log(`Signed out of ${bold(server)}.`)
 }
 
 // ── profiles ───────────────────────────────────────────────────────────────
+
+/**
+ * Give a profile its own credentials for a server, so the server runs as a
+ * separate account for it. With no server, list the profile's credentials.
+ */
+export async function profileCredentials(
+  name: string | undefined,
+  serverName: string | undefined,
+  opts: { env?: string[]; header?: string[]; account?: string; remove?: boolean },
+) {
+  const profile = slug(name, 'profile')
+  const store = await openConfig()
+  const p = store.config.profiles[profile]
+  if (!p) throw new UsageError(`No profile named "${profile}".`)
+  if (!serverName) {
+    const rows = Object.entries(p.credentials).map(([server, c]) => [
+      server,
+      instanceFor(store.config, profile, server),
+      [...Object.keys(c.env), ...Object.keys(c.headers)].join(', ') || dim('(sign-in only)'),
+    ])
+    if (!rows.length)
+      return console.log(
+        `${bold(profile)} uses every server's own credentials.\nGive it its own: ${brand.name} profile credentials ${profile} SERVER --env KEY=secret://NAME`,
+      )
+    return console.log(table(rows, ['SERVER', 'ACCOUNT', 'SETS']))
+  }
+  const server = slug(serverName, 'server')
+  const config = store.config.servers[server]
+  if (!config) throw new UsageError(`No server named "${server}".`)
+  if (opts.remove) {
+    if (!p.credentials[server])
+      return console.log(`${bold(profile)} has no credentials of its own for ${server}.`)
+    await store.update((c) => {
+      delete c.profiles[profile]!.credentials[server]
+      return c
+    })
+    return console.log(`${bold(profile)} now uses ${bold(server)}'s own credentials.`)
+  }
+  if (opts.env?.length && config.transport !== 'stdio')
+    throw new UsageError(`${server} is a remote server; give it --header K=V instead of --env.`)
+  if (opts.header?.length && config.transport === 'stdio')
+    throw new UsageError(`${server} runs a command; give it --env K=V instead of --header.`)
+  const current = p.credentials[server]
+  const account = opts.account ? slug(opts.account, 'account') : current?.account
+  const credential = {
+    ...(account ? { account } : {}),
+    env: opts.env ? keyValues(opts.env, '--env') : (current?.env ?? {}),
+    headers: opts.header ? keyValues(opts.header, '--header') : (current?.headers ?? {}),
+  }
+  await store.update((c) => {
+    c.profiles[profile]!.credentials[server] = credential
+    if (!c.profiles[profile]!.servers.includes(server)) c.profiles[profile]!.servers.push(server)
+    return c
+  })
+  const id = instanceFor(store.config, profile, server)
+  console.log(`${bold(profile)} now uses its own account of ${bold(server)}: ${cyan(id)}.`)
+  const values = [...Object.values(credential.env), ...Object.values(credential.headers)]
+  if (values.some((v) => !v.includes('secret://') && !v.includes('env://')))
+    console.log(yellow('Tip: store keys as secrets (secret://NAME) so they stay out of config.json.'))
+  if (config.transport !== 'stdio' && !values.length)
+    console.log(dim(`Sign this account in: ${brand.name} server auth ${id}`))
+}
 
 export async function profileAdd(
   name: string | undefined,
@@ -263,14 +364,18 @@ export async function profileShow(name: string | undefined) {
     `Surface ${p.surface} · endpoint ${cyan(`http://127.0.0.1:${defaultPort()}/p/${profile}/mcp`)}\n`,
   )
   for (const [server, config] of Object.entries(store.config.servers)) {
-    const tools = catalog.get(server)?.tools ?? []
+    const instance = instanceFor(store.config, profile, server)
+    const tools = (catalog.get(instance) ?? catalog.get(server))?.tools ?? []
     const included = tools.filter(
       (t) =>
         (p.servers.includes(server) || p.include.some((x) => matchToolPattern(x, server, t.name))) &&
         !p.exclude.some((x) => matchToolPattern(x, server, t.name)),
     )
     if (!included.length && !p.servers.includes(server)) continue
-    console.log(`${bold(server)}${config.enabled ? '' : dim(' (disabled)')}`)
+    const account = parseInstanceId(instance).account
+    console.log(
+      `${bold(server)}${account ? dim(` (own account: ${instance})`) : ''}${config.enabled ? '' : dim(' (disabled)')}`,
+    )
     if (!tools.length) console.log(dim(`  tools not known yet; run \`${brand.name} server test ${server}\``))
     for (const t of included) console.log(`  ${exposedToolName(server, t.name)}`)
   }

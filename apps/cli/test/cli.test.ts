@@ -129,6 +129,22 @@ describe('switchboard CLI', () => {
     await client.close()
   })
 
+  it('gives a profile its own account of a server', async () => {
+    await sb('secret', 'set', 'lite-token', 'l-1')
+    expect(
+      await sb('profile', 'credentials', 'lite', 'alpha', '--env', 'TOKEN=secret://lite-token'),
+    ).toContain('own account of alpha: alpha.lite')
+    expect(await sb('profile', 'credentials', 'lite')).toMatch(/alpha\s+alpha\.lite\s+TOKEN/)
+    expect(await sb('server', 'ls')).toMatch(/alpha .*\blite\b/)
+    expect(await sb('server', 'test', 'alpha', '--profile', 'lite')).toContain('Starting alpha.lite')
+    const config = JSON.parse(await readFile(join(root, 'state', 'config.json'), 'utf8'))
+    expect(config.profiles.lite.credentials.alpha.env).toEqual({ TOKEN: 'secret://lite-token' })
+    await expect(sb('server', 'test', 'alpha.nobody')).rejects.toThrow(/No account "nobody"/)
+    expect(await sb('profile', 'credentials', 'lite', 'alpha', '--remove')).toContain(
+      "uses alpha's own credentials",
+    )
+  })
+
   it('reports usage errors clearly', async () => {
     await expect(sb('profile', 'add', 'Bad Name')).rejects.toThrow(/Invalid profile name/)
     await expect(sb('nonsense')).rejects.toThrow(/Unknown command/)

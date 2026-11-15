@@ -213,7 +213,14 @@ export async function status(opts: { json?: boolean }) {
   }
   const [info, servers, sessions] = await Promise.all([
     api<Status>('/status'),
-    api<{ name: string; status?: ConnectionStatus; config: { enabled: boolean } }[]>('/servers'),
+    api<
+      {
+        name: string
+        status?: ConnectionStatus
+        config: { enabled: boolean }
+        instances?: { id: string; account: string | null; status?: ConnectionStatus }[]
+      }[]
+    >('/servers'),
     api<SessionInfo[]>('/sessions'),
   ])
   if (opts.json) {
@@ -229,12 +236,15 @@ export async function status(opts: { json?: boolean }) {
       !s ? '' : s.state === 'ready' ? green('running') : s.state === 'error' ? red('error') : dim(s.state)
     console.log(
       table(
-        servers.map((s) => [
-          s.name,
-          s.config.enabled ? state(s.status) : dim('disabled'),
-          String(s.status?.toolCount ?? '-'),
-          s.status?.lastError ? red(s.status.lastError.slice(0, 80)) : '',
-        ]),
+        // One row per running copy: the server itself, then each profile's own account.
+        servers.flatMap((s) =>
+          (s.instances?.length ? s.instances : [{ id: s.name, account: null, status: s.status }]).map((i) => [
+            i.account ? `${s.name} ${dim(`(${i.account})`)}` : s.name,
+            s.config.enabled ? state(i.status) : dim('disabled'),
+            String(i.status?.toolCount ?? '-'),
+            i.status?.lastError ? red(i.status.lastError.slice(0, 80)) : '',
+          ]),
+        ),
         ['SERVER', 'STATE', 'TOOLS', 'ERROR'],
       ),
     )
@@ -320,6 +330,18 @@ export async function doctor() {
       for (const ref of values.flatMap(secretRefs)) {
         if (!known.has(ref))
           fail(`Server ${name}: secret "${ref}" is not set; run \`${brand.name} secret set ${ref}\``)
+      }
+    }
+    for (const [profile, p] of Object.entries(config.profiles)) {
+      for (const [server, credential] of Object.entries(p.credentials)) {
+        for (const ref of [...Object.values(credential.env), ...Object.values(credential.headers)].flatMap(
+          secretRefs,
+        )) {
+          if (!known.has(ref))
+            fail(
+              `Profile ${profile}, ${server} credentials: secret "${ref}" is not set; run \`${brand.name} secret set ${ref}\``,
+            )
+        }
       }
     }
     if (!Object.keys(config.profiles).length)

@@ -22,10 +22,13 @@ ${bold('Usage')}
        [--env K=V] [--header K=V] [--cwd DIR] [--idle SECONDS]
   ${n} server ls | rm NAME | test NAME | enable NAME | disable NAME
   ${n} server auth NAME | signout NAME       Sign in to a server that uses OAuth
+       [--profile NAME]                       ...the account a profile uses (or NAME.ACCOUNT)
 
   ${n} profile add NAME [--servers a,b] [--include s.tool] [--exclude s.tool]
        [--surface auto|passthrough|meta|code] [--description TEXT]
   ${n} profile ls | show NAME | rm NAME
+  ${n} profile credentials NAME [SERVER]      A profile's own account of a server
+       [--env K=V] [--header K=V] [--account NAME] [--remove]
   ${n} default PROFILE|none                   Profile for clients nothing else matches
 
   ${n} client ls                              Clients and the profile each one uses
@@ -84,6 +87,8 @@ const options = {
   'public-url': { type: 'string' },
   label: { type: 'string' },
   auto: { type: 'boolean' },
+  account: { type: 'string' },
+  remove: { type: 'boolean' },
 } as const
 
 async function connect(profile: string | undefined, url: string | undefined, client?: string) {
@@ -173,13 +178,13 @@ async function main(argv: string[]) {
         case 'remove':
           return cfg.serverRemove(a1)
         case 'test':
-          return cfg.serverTest(a1)
+          return cfg.serverTest(a1, o)
         case 'auth':
         case 'login':
-          return cfg.serverAuth(a1)
+          return cfg.serverAuth(a1, o)
         case 'signout':
         case 'logout':
-          return cfg.serverSignOut(a1)
+          return cfg.serverSignOut(a1, o)
         case 'enable':
           return cfg.serverEnable(a1, true)
         case 'disable':
@@ -199,6 +204,9 @@ async function main(argv: string[]) {
         case 'rm':
         case 'remove':
           return cfg.profileRemove(a1)
+        case 'credentials':
+        case 'creds':
+          return cfg.profileCredentials(a1, a2, o)
       }
       break
     case 'client':
