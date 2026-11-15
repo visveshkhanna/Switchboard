@@ -55,13 +55,14 @@ See [Profiles](/docs/concepts/profiles).
 
 ### Connect a client
 
-On **Clients**, pick a client and a profile and click **Connect**. Switchboard writes its entry into the client's configuration file, keeping a backup. From the terminal:
+On **Clients**, click **Set up** on a client. Switchboard writes one entry into the client's configuration file, keeping a backup; restart the client once. It uses the default profile (your first one), and you switch it with the profile switches on the same page, live. From the terminal:
 
 ```bash
-switchboard client connect cursor --profile work
+switchboard client connect cursor
+switchboard client use cursor work
 ```
 
-Restart or reload the client, and its tools come from the `work` profile. See [Connecting clients](/docs/guides/connect-clients).
+See [Connecting clients](/docs/guides/connect-clients).
 
 </Step>
 </Steps>

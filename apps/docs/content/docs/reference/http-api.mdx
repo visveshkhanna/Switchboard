@@ -12,7 +12,8 @@ The daemon listens on `http://127.0.0.1:7690` by default and speaks the MCP [Str
 | `POST` | `/p/:profile/mcp` | send JSON-RPC requests and notifications to the named profile |
 | `GET` | `/p/:profile/mcp` | open a server-sent event stream for notifications, such as `tools/list_changed` |
 | `DELETE` | `/p/:profile/mcp` | end the session |
-| `POST`, `GET`, `DELETE` | `/mcp` | the same, with the profile chosen by header, client rule or default |
+| `POST`, `GET`, `DELETE` | `/c/:client/mcp` | the same, as client `:client`: its own profile, a client rule or the default profile |
+| `POST`, `GET`, `DELETE` | `/mcp` | the same, with the profile chosen by header, the client's own profile (by its MCP name), a client rule or the default |
 | `GET` | `/healthz` | `{"ok": true, "name": "switchboard", "version": "…"}` |
 | `GET` | `/oauth/callback` | where OAuth sign-ins for remote servers return |
 | | `/api/*` | the [admin API](#admin-api) |
@@ -56,7 +57,7 @@ What `tools/list` returns depends on the profile's [surface](/docs/concepts/tool
 
 ## stdio
 
-For clients without HTTP support, `switchboard connect --profile <profile>` exposes the same endpoint over stdio. See [stdio bridge](/docs/guides/connect-clients#stdio-bridge).
+For clients without HTTP support, `switchboard connect --client <id>` exposes the same endpoint over stdio. See [stdio bridge](/docs/guides/connect-clients#stdio-bridge).
 
 ## Admin API
 

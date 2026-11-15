@@ -22,7 +22,8 @@ It runs at http://127.0.0.1:7690. Use the `npx mcp-switchboard` CLI (or `switchb
 4. Move any tokens that were imported as plain text into secrets:
    `npx mcp-switchboard secret set NAME`, then reference them as secret://NAME.
 5. Connect this client to the profile I choose:
-   `npx mcp-switchboard client connect <cursor|claude-code|vscode|windsurf|codex|gemini-cli|claude-desktop> --profile NAME`
+   `npx mcp-switchboard client connect <cursor|claude-code|vscode|windsurf|codex|gemini-cli|claude-desktop>`
+   then give it the profile I chose: `npx mcp-switchboard client use <id> NAME`
 6. Run `npx mcp-switchboard doctor` and fix anything it reports, then tell me to restart
    the client so it picks up the new MCP entry.
 ```

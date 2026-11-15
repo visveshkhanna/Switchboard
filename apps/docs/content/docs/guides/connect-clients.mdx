@@ -1,25 +1,32 @@
 ---
 title: Connecting clients
-description: Point Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Codex and Gemini CLI at a profile.
+description: Set up Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Codex, Gemini CLI or any MCP client once, then switch its profile any time.
 ---
 
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-## One click
+## Set up once, switch any time
 
-On the web UI's **Clients** page, Switchboard lists the clients it supports and whether each is installed. Pick a profile for a client and click **Connect**: Switchboard adds a `switchboard` entry to the client's user-level MCP configuration. Or from a terminal:
+On the web UI's **Clients** page, click **Set up** on a client: Switchboard adds one `switchboard` entry to the client's user-level MCP configuration, pointing at the client's own URL, such as `http://127.0.0.1:7690/c/cursor/mcp`. Restart the client once. From then on, its profile is a switch on the same page: turn a profile on and the client uses it straight away, without editing files or restarting. See [Profile resolution](/docs/concepts/profile-resolution).
+
+From a terminal:
 
 ```bash
-switchboard client ls                              # clients, their config files and profiles
-switchboard client connect cursor --profile work
-switchboard client disconnect cursor
+switchboard client connect cursor          # set it up once
+switchboard client use cursor work         # switch its profile, live
+switchboard client ls                      # every client and the profile it uses
+switchboard client disconnect cursor       # remove the entry
 ```
 
-Client ids are `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex` and `gemini-cli`. The URL uses the running daemon's port; pass `--port` to `client connect` to use another.
+Client ids are `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex` and `gemini-cli`. The URL uses the running daemon's port; pass `--port` to `client connect` to use another. `--profile <name>` writes a URL pinned to one profile instead (switches then do not apply to it).
+
+## Any other client
+
+A client Switchboard has no preset for works too: point it at `http://127.0.0.1:7690/c/<name>/mcp`, with any name you like, or at the shared `http://127.0.0.1:7690/mcp`. It appears on the Clients page as soon as it connects, with the same profile switches.
 
 Before writing, Switchboard copies the file to `~/.switchboard/backups`. It changes only its own `switchboard` entry; JSON files are edited in place, so other keys and comments survive. If the file already has a `switchboard` entry that Switchboard did not write, it refuses to touch it. Reload or restart the client afterwards.
 
-The page also shows snippets to copy, for clients or projects you would rather configure by hand. The snippets below are what Connect writes; replace `work` with your profile.
+The page also shows snippets to copy, for clients or projects you would rather configure by hand. The snippets below pin a profile in the URL; to switch profiles from Switchboard instead, use the client's own URL, `/c/<client>/mcp`, in place of `/p/work/mcp`.
 
 ## By hand
 
@@ -130,11 +137,7 @@ Switchboard rewrites the TOML file when it connects Codex, so comments in it are
 Some clients can only start MCP servers as local processes speaking stdio. For them, `switchboard connect` is a small bridge: it reads MCP messages on stdin, forwards them to the daemon over HTTP, and writes the replies to stdout.
 
 ```bash
-switchboard connect --profile work
+switchboard connect --client claude-desktop
 ```
 
-If the daemon is not running, the bridge starts it in the background. Configure the client to run `switchboard connect --profile <profile>`, or `npx -y mcp-switchboard connect --profile <profile>` when the package is not installed globally. `--url` connects to a given MCP endpoint instead. The bridge writes only MCP messages to stdout; anything else goes to stderr.
-
-## One entry, several profiles
-
-Instead of a profile in each URL, you can give every client the same `http://127.0.0.1:7690/mcp` entry and let [client rules](/docs/concepts/profile-resolution#client-rules) choose the profile by the client's name. In the web UI, pick **Automatic** as the profile when connecting, or run `switchboard client connect cursor --auto`.
+If the daemon is not running, the bridge starts it in the background. Configure the client to run `switchboard connect --client <id>`, or `npx -y mcp-switchboard connect --client <id>` when the package is not installed globally; its profile is then switched in Switchboard like any other client's. `--profile <profile>` pins a profile instead. `--url` connects to a given MCP endpoint instead. The bridge writes only MCP messages to stdout; anything else goes to stderr.

@@ -34,10 +34,11 @@ Switchboard keeps its configuration in `~/.switchboard/config.json` (under `SWIT
       "budgets": { "timeoutMs": 30000, "maxToolCalls": 64 }
     }
   },
-  "clientRules": [
-    { "client": "cursor*", "profile": "work" },
-    { "client": "claude-code", "profile": "personal" }
-  ],
+  "clients": {
+    "cursor": { "profile": "work" },
+    "claude-code": {}
+  },
+  "clientRules": [],
   "defaultProfile": "personal"
 }
 ```
@@ -80,6 +81,15 @@ Each server is an MCP server Switchboard can start or connect to.
 | `budgets.maxResultChars` | number | code mode: result size before truncation. Default `24000` |
 
 Every server listed in `servers` must exist. See [Profiles](/docs/concepts/profiles), [Tool surfaces](/docs/concepts/tool-surfaces) and [Code mode](/docs/concepts/code-mode).
+
+## clients
+
+Each client's profile, keyed by client id: the `<client>` in `/c/<client>/mcp`, or the client's MCP name turned into an id. See [Profile resolution](/docs/concepts/profile-resolution#each-clients-own-profile).
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | display name, such as the MCP name it connected with |
+| `profile` | string \| null | the profile it uses; `null` for no tools; absent to use the default profile |
 
 ## clientRules
 

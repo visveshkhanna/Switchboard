@@ -1,30 +1,73 @@
 ---
 title: Profile resolution
-description: How Switchboard decides which profile a connection uses.
+description: How Switchboard decides which profile a client uses, and how to switch it.
 ---
 
-Switchboard picks the profile once, when a client opens an MCP session, and keeps it for that session. It checks, in order:
+Each client uses one profile at a time. You choose it per client in Switchboard and can switch it whenever you like: connected clients get the new tool list at once, without reconnecting or restarting.
+
+When a client opens an MCP session, Switchboard checks, in order:
 
 | # | Source | Example |
 |---|---|---|
-| 1 | **URL path** | `http://127.0.0.1:7690/p/work/mcp` |
-| 2 | **Header** | `X-Switchboard-Profile: work` on `http://127.0.0.1:7690/mcp` |
-| 3 | **Client rules** | the client's name `cursor` matches the rule `cursor*` → `work` |
-| 4 | **Default profile** | `defaultProfile` in the configuration |
+| 1 | **Profile in the URL path** | `http://127.0.0.1:7690/p/work/mcp` |
+| 2 | **Profile in a header** | `X-Switchboard-Profile: work` on `/mcp` |
+| 3 | **The client's own profile** | Cursor, on `/c/cursor/mcp`, is set to `work` |
+| 4 | **Client rules** | the client's name `cursor-vscode` matches the rule `cursor*` → `work` |
+| 5 | **Default profile** | `defaultProfile` in the configuration |
 
-The first that applies wins.
+The first that applies wins. Most setups only ever use 3 and 5.
 
-## URL path
+## Each client's own profile
 
-The most reliable choice, since every HTTP client can use a URL. One-click [Connect](/docs/guides/connect-clients) writes this form.
+[Set a client up](/docs/guides/connect-clients) once and its config file gets its own URL:
+
+```text
+http://127.0.0.1:7690/c/<client>/mcp
+```
+
+The `<client>` part is the client's id in Switchboard (`cursor`, `claude-code`, or any name you choose). Clients that connect to the shared `/mcp` URL instead are identified by their MCP name (`clientInfo.name`), turned into an id: `Brand New IDE` becomes `brand-new-ide`. Either way the client is listed on the web UI's **Clients** page, where each profile has a switch:
+
+- Turn a profile on and the client uses it; only one can be on.
+- Turn the active profile off and the client gets **no tools** until you turn one on.
+- **Use the default profile** returns it to the default.
+
+From the terminal:
+
+```bash
+switchboard client use cursor work       # use the "work" profile
+switchboard client use cursor none       # no tools
+switchboard client use cursor default    # follow the default profile
+switchboard client ls                    # every client and the profile it uses
+```
+
+The choice is saved in `config.json`:
+
+```json
+"clients": {
+  "cursor": { "profile": "work" },
+  "brand-new-ide": { "name": "Brand New IDE", "profile": null }
+}
+```
+
+`profile: null` means no tools; a client without `profile` uses the default profile.
+
+## Default profile
+
+New clients use `defaultProfile`. The first profile you create becomes the default; change it on the Profiles page, at the top of the Clients page, or with:
+
+```bash
+switchboard default work
+```
+
+Deleting the default profile makes another profile the default. If there are no profiles, or you clear the default with `switchboard default none`, new clients connect but **wait for a profile**: they see no tools, and their instructions say where to pick one. As soon as you turn a profile on for them, their tools appear, without reconnecting.
+
+## Profile in the URL or a header
+
+To pin a connection to a profile regardless of the client's setting, put the profile in the URL or a header:
 
 ```text
 http://127.0.0.1:7690/p/<profile>/mcp
 ```
-
-## Header
-
-Clients that let you set request headers, such as Cursor and VS Code, can use the shared `/mcp` endpoint with a header:
 
 ```json
 {
@@ -33,18 +76,17 @@ Clients that let you set request headers, such as Cursor and VS Code, can use th
 }
 ```
 
+Pinned sessions never move when you switch the client's profile. `switchboard client connect cursor --profile work` writes the pinned form.
+
 ## Client rules
 
-When neither the path nor the header names a profile, Switchboard reads the client's name from the MCP `initialize` request (`clientInfo.name`) and tries each client rule. A rule matches the name with a glob:
+Rules give a profile to clients by a glob on their MCP name, for clients that have no profile of their own:
 
 ```json
-"clientRules": [
-  { "client": "cursor*", "profile": "work" },
-  { "client": "claude-code", "profile": "personal" }
-]
+"clientRules": [{ "client": "cursor*", "profile": "work" }]
 ```
 
-`*` matches any run of characters, and matching ignores case. From the terminal:
+`*` matches any run of characters, and matching ignores case. Rules are checked in order and the first match wins.
 
 ```bash
 switchboard rule add "cursor*" work
@@ -52,24 +94,12 @@ switchboard rule ls
 switchboard rule rm "cursor*"
 ```
 
-This lets one plain `http://127.0.0.1:7690/mcp` entry serve different profiles to different clients. Rules are checked in order and the first match wins.
-
-## Default profile
-
-If nothing else applies, the session uses `defaultProfile`. Without a default profile, the client still connects, but **waits for a profile**: it sees no tools, and its instructions say where to assign one. Every client that connects is listed in the web UI's Clients page (and `switchboard client ls`), including clients Switchboard has no preset for. Pick a profile for a waiting client there, or run `switchboard rule add "<client name>" <profile>`, and its open session switches to that profile at once, without reconnecting. Set or clear it with:
-
-```bash
-switchboard default work
-switchboard default none
-```
-
 ## Unknown profiles
 
-A profile name in the path or the header that does not exist is an error: HTTP `400` with JSON-RPC error `-32602`, whose message lists the profiles that do exist, so the fix is easy to spot in the client's logs. Rules and the default profile cannot point at a missing profile: the configuration is rejected, and deleting a profile also removes its rules and clears it as the default.
+A profile name in the path or the header that does not exist is an error: HTTP `400` with JSON-RPC error `-32602`, whose message lists the profiles that do exist. A client's profile, rules and the default profile cannot point at a missing profile: the configuration is rejected, and deleting a profile clears it from clients and rules.
 
-## Each session is separate
+## Sessions
 
-Sessions whose profile came from a client rule or the default profile follow changes to the rules and the default: change them and connected clients get the new tool list. Sessions that chose their profile by URL path or header never move.
+Sessions whose profile came from the client's setting, a rule or the default follow changes to them: switch a profile and connected clients get `notifications/tools/list_changed` and the new tool list. Sessions pinned by URL path or header never move.
 
-
-Every session gets its own view of its profile, and another client's activity never changes what it sees. When you edit a profile, or a server's tools change, only the sessions whose tool list actually changed are sent `notifications/tools/list_changed`. Sessions with no requests for six hours are closed.
+Every session gets its own view of its profile, and another client's activity never changes what it sees. When you edit a profile, or a server's tools change, only the sessions whose tool list actually changed are notified. Sessions with no requests for six hours are closed.

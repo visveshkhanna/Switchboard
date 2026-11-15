@@ -24,8 +24,10 @@ switchboard profile ls | show NAME | rm NAME
 switchboard default PROFILE|none                  profile for clients nothing else matches
 
 switchboard client ls                             AI clients and their connections
-switchboard client connect ID --profile NAME [--port N]
-switchboard client connect ID --auto              shared endpoint; client rules pick the profile
+switchboard client connect ID [--port N]          set a client up once (its own URL)
+switchboard client use ID PROFILE|none|default    switch a client's profile, live
+switchboard client connect ID --profile NAME      pin a profile in the URL instead
+switchboard client connect ID --auto              use the shared /mcp URL
 switchboard client disconnect ID
 switchboard rule add "CLIENT-GLOB" PROFILE        pick a profile by MCP client name
 switchboard rule ls | rm "CLIENT-GLOB"
@@ -33,7 +35,7 @@ switchboard rule ls | rm "CLIENT-GLOB"
 switchboard secret set NAME [VALUE]               store a secret (prompts if no value)
 switchboard secret ls | rm NAME
 
-switchboard connect [--profile NAME]              stdio bridge for stdio-only clients
+switchboard connect [--client ID|--profile NAME]  stdio bridge for stdio-only clients
 
 switchboard activity [on|off]                     keep a log of tool calls for activity charts
 
@@ -88,7 +90,7 @@ Reads the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, W
 
 ## client
 
-`client ls` lists the supported clients, whether each is installed, the profile it is connected to, and how many other servers its configuration has, then every MCP client that has connected, with its profile or `waiting`. `client connect` writes a `switchboard` entry into the client's MCP configuration, after backing the file up, and `client disconnect` removes it. With `--auto` instead of `--profile`, the entry points at the shared `/mcp` endpoint, where [client rules](/docs/concepts/profile-resolution#client-rules) and the default profile choose the profile. Client ids: `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex`, `gemini-cli`. See [Connecting clients](/docs/guides/connect-clients).
+`client ls` lists every client, known or connected, with the profile it uses (and whether that comes from the default or a rule) and how it is set up. `client connect` writes a `switchboard` entry into the client's MCP configuration, after backing the file up, pointing at the client's own URL, `/c/<id>/mcp`; restart the client once. `client use` then switches its profile at any time, live: a profile name, `none` for no tools, or `default`. `client connect --profile` pins a profile in the URL instead, and `--auto` uses the shared `/mcp` URL. `client disconnect` removes the entry. Client ids: `cursor`, `claude-code`, `claude-desktop`, `vscode`, `windsurf`, `codex`, `gemini-cli`, or any id a client connected with. See [Connecting clients](/docs/guides/connect-clients) and [Profile resolution](/docs/concepts/profile-resolution).
 
 ## secret
 
@@ -97,10 +99,10 @@ Reads the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, W
 ## connect
 
 ```bash
-switchboard connect --profile work
+switchboard connect --client claude-desktop
 ```
 
-A bridge between stdio and the daemon's HTTP endpoint, for clients that can only start MCP servers as local processes. It starts the daemon in the background if it is not running. Without `--profile`, it uses the shared `/mcp` endpoint, where client rules and the default profile decide. See [stdio bridge](/docs/guides/connect-clients#stdio-bridge).
+A bridge between stdio and the daemon's HTTP endpoint, for clients that can only start MCP servers as local processes. It starts the daemon in the background if it is not running. `--client` connects as that client, so its profile is switched in Switchboard; `--profile` pins a profile; with neither, it uses the shared `/mcp` endpoint. See [stdio bridge](/docs/guides/connect-clients#stdio-bridge).
 
 ## activity
 
