@@ -18,7 +18,7 @@ The first page you see. Until setup is done, a **Get started** checklist walks t
 
 Every configured server with its state: **Running**, **Idle · starts on demand**, **Starting**, **Error** (with the next automatic restart), or **Sign-in required**. Add a server with the form, or **Paste JSON** from any `mcp.json`, including a whole `mcpServers` block. A new server is started at once to discover its tools.
 
-A server's page has **Settings**, its cached **Tools**, and **Logs** with recent stderr output. **Test** starts it and lists its tools; **Restart** stops and starts it again. **Keep running** starts the server with Switchboard and keeps it up (`idleTimeoutSec: 0`). A server that uses OAuth shows a **Sign in** card instead; the page updates on its own once you have signed in. The form warns about `secret://` references whose secret is not stored yet. See [Importing servers](/docs/guides/import-servers).
+A server's page has **Settings**, its cached **Tools**, and **Logs** with recent stderr output. **Test** starts it and lists its tools; **Restart** stops and starts it again. **Keep running** starts the server with Switchboard and keeps it up (`idleTimeoutSec: 0`). A server that uses OAuth shows a **Sign in** card instead; the page updates on its own once you have signed in. The form warns about `secret://` references whose secret is not stored yet. When profiles have their own credentials for the server, **Accounts** lists each account with the profiles it serves, its state and any error, and a **Sign in** or **Restart** button for each. See [Importing servers](/docs/guides/import-servers).
 
 ## Import
 
@@ -26,7 +26,7 @@ The MCP servers found in your clients' configuration files, grouped by client. S
 
 ## Profiles
 
-Create and edit [profiles](/docs/concepts/profiles): name, description, servers, `include` and `exclude` patterns, and the surface with its threshold and code-mode budgets. Every tool of the profile's servers has a switch, which edits `include` and `exclude` for you, and **Customize** sets an [override](/docs/concepts/profiles#tool-names-clients-see) of its name or description.
+Create and edit [profiles](/docs/concepts/profiles): name, description, servers, `include` and `exclude` patterns, and the surface with its threshold and code-mode budgets. Every tool of the profile's servers has a switch, which edits `include` and `exclude` for you, and **Customize** sets an [override](/docs/concepts/profiles#tool-names-clients-see) of its name or description. Under **Credentials**, each server can run as a separate account for the profile, with its own environment variables or headers, or its own OAuth sign-in; see [Credentials per profile](/docs/concepts/credentials).
 
 A live preview, which stays in view as you scroll, shows before you save exactly what a client of the profile will see: the surface `auto` would pick, the names clients get, and an estimate of how many tokens the tool list costs compared with `passthrough`.
 

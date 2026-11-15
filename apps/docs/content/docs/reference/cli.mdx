@@ -85,11 +85,13 @@ Reads the configuration files of Cursor, Claude Code, Claude Desktop, VS Code, W
 
 `server add` adds or replaces a server: a stdio server from the command after `--`, or a remote one with `--url` (Streamable HTTP, falling back to SSE; `--sse` for SSE only). `--env`/`-e` and `--header`/`-H` take `KEY=VALUE` and can be repeated. `--cwd` sets a stdio server's working directory and `--idle` its idle timeout in seconds.
 
-`server ls` lists servers with their transport, target and cached tool count. `server test` starts a server, prints its tools and stores them in the catalog. `server enable` and `disable` switch a server on or off, and `server rm` removes it, and from every profile. `server auth` opens the OAuth sign-in page for a server and waits until it is signed in; `server signout` forgets its tokens. Both need the daemon running.
+`server ls` lists servers with their transport, target and cached tool count. `server test` starts a server, prints its tools and stores them in the catalog. `server enable` and `disable` switch a server on or off, and `server rm` removes it, and from every profile. `server auth` opens the OAuth sign-in page for a server and waits until it is signed in; `server signout` forgets its tokens. Both need the daemon running. `server test`, `auth` and `signout` act on one [account](/docs/concepts/credentials) of a server when given `server.account` (`github.work`) or `--profile NAME`; `server ls` lists each server's accounts.
 
 ## profile, default, rule
 
 `profile add` creates a profile, and run again (or as `profile set`) updates the fields you pass. `--servers`, `--include` and `--exclude` take comma-separated lists. `profile ls` lists profiles, `profile show` prints the tools a client of the profile sees, by server, with their exposed names, and `profile rm` removes it along with its client rules.
+
+`profile credentials PROFILE SERVER` gives a profile [its own account](/docs/concepts/credentials) of a server: `--env KEY=VALUE` for servers that run a command, `--header KEY=VALUE` for remote ones (repeatable, usually `secret://NAME`), `--account NAME` to share an account between profiles, and no values for a separate OAuth sign-in. `--remove` goes back to the server's own credentials. With no server it lists the profile's credentials.
 
 `default` sets the [default profile](/docs/concepts/profile-resolution#default-profile), or clears it with `none`. `rule add` adds a [client rule](/docs/concepts/profile-resolution#client-rules), replacing any rule with the same pattern; `rule ls` lists them in order and `rule rm` removes one.
 

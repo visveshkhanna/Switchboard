@@ -72,6 +72,7 @@ Each server is an MCP server Switchboard can start or connect to.
 | `include` | string[] | extra tools, as `server.tool` or `server.*`; `*` is a wildcard in either part |
 | `exclude` | string[] | tools to remove, same patterns; applied last |
 | `overrides` | object | per-tool changes keyed by `server.tool`: `{ "name": "...", "description": "..." }` |
+| `credentials` | object | this profile's own account of a server, keyed by server name: `{ "account"?: "...", "env": {...}, "headers": {...} }`, merged over the server's `env` or `headers`. See [Credentials per profile](/docs/concepts/credentials) |
 | `surface` | `"auto"` \| `"passthrough"` \| `"meta"` \| `"code"` | how tools are presented. Default `"auto"` |
 | `autoThreshold` | number | with `auto`, the most tools served as `passthrough`. Default `40` |
 | `budgets.timeoutMs` | number | code mode: time limit per run. Default `30000` |
@@ -80,7 +81,7 @@ Each server is an MCP server Switchboard can start or connect to.
 | `budgets.maxSourceBytes` | number | code mode: size of the code. Default `65536` |
 | `budgets.maxResultChars` | number | code mode: result size before truncation. Default `24000` |
 
-Every server listed in `servers` must exist. See [Profiles](/docs/concepts/profiles), [Tool surfaces](/docs/concepts/tool-surfaces) and [Code mode](/docs/concepts/code-mode).
+Every server listed in `servers` or `credentials` must exist, and profiles naming the same `account` for a server must give it the same credentials. See [Profiles](/docs/concepts/profiles), [Tool surfaces](/docs/concepts/tool-surfaces) and [Code mode](/docs/concepts/code-mode).
 
 ## clients
 

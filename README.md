@@ -24,6 +24,7 @@ Group your MCP servers into profiles (personal, work, a client's) and give Curso
 ## Why
 
 - **Profiles, not toggles.** Stop enabling and disabling servers in every project. Define `personal`, `work` and `client-acme` once.
+- **One server, many accounts.** Give a profile its own API key or sign-in for a server (`work` and `personal` GitHub), without adding the server twice.
 - **Switch live.** Set a client up once; after that its profile is a switch in Switchboard. Flip it and the client gets the new tools instantly, with no config edit or restart.
 - **Any client.** Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Codex and Gemini CLI are set up for you; any other MCP client shows up the moment it connects.
 - **One process per server.** Ten clients share one copy of each MCP server, started when added, stopped when idle and restarted if it crashes.
@@ -121,6 +122,7 @@ switchboard server add linear --url https://mcp.linear.app/mcp
 switchboard server auth linear                       # OAuth sign-in in the browser
 switchboard secret set github-token                  # use as secret://github-token
 switchboard profile add work --servers github,linear
+switchboard profile credentials work github -e GITHUB_TOKEN=secret://github-work   # its own account
 switchboard client connect cursor                    # set it up once
 switchboard client use cursor work                   # switch its profile, live
 switchboard status
