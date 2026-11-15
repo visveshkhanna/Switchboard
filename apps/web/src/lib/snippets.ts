@@ -13,6 +13,11 @@ export function sharedUrl(port?: number): string {
   return `${baseUrl(port)}/mcp`
 }
 
+/** A client's own URL: its profile is then switched in Switchboard, not in its config file. */
+export function clientUrl(port: number | undefined, id: string): string {
+  return `${baseUrl(port)}/c/${id}/mcp`
+}
+
 export interface ClientInfo {
   id: string
   name: string
@@ -74,7 +79,11 @@ export function clientInfo(id: string): ClientInfo | undefined {
 }
 
 /** The value Switchboard writes under its `switchboard` key for a client. */
-export function entryFor(clientId: string, url: string, profile: string | null): Record<string, unknown> {
+export function entryFor(
+  clientId: string,
+  url: string,
+  target: { profile?: string | null; client?: string } = {},
+): Record<string, unknown> {
   switch (clientId) {
     case 'claude-code':
     case 'vscode':
@@ -86,7 +95,16 @@ export function entryFor(clientId: string, url: string, profile: string | null):
     case 'claude-desktop':
       return {
         command: 'npx',
-        args: ['-y', brand.packageName, 'connect', ...(profile ? ['--profile', profile] : [])],
+        args: [
+          '-y',
+          brand.packageName,
+          'connect',
+          ...(target.client
+            ? ['--client', target.client]
+            : target.profile
+              ? ['--profile', target.profile]
+              : []),
+        ],
       }
     default:
       return { url }
@@ -99,31 +117,29 @@ function toml(value: Record<string, unknown>): string {
     .join('\n')
 }
 
-/** The exact block to paste into a client's config file, `profile: null` meaning the shared /mcp URL. */
-export function configSnippet(clientId: string, port: number | undefined, profile: string | null): string {
+function wrap(clientId: string, entry: Record<string, unknown>): string {
   const info = clientInfo(clientId)
-  const url = profile ? profileUrl(port, profile) : sharedUrl(port)
-  const entry = entryFor(clientId, url, profile)
   if (info?.format === 'toml') return `[${info.key}.${brand.name}]\n${toml(entry)}`
   return JSON.stringify({ [info?.key ?? 'mcpServers']: { [brand.name]: entry } }, null, 2)
 }
 
-/** The "add this MCP to your client" text, for one client. */
-export function manualInstructions(
-  clientId: string,
-  port: number | undefined,
-  profile: string | null,
-): string {
+/** The block Switchboard writes when it sets a client up with its own URL. */
+export function clientSnippet(clientId: string, url: string): string {
+  return wrap(clientId, entryFor(clientId, url, { client: clientId }))
+}
+
+/** The "add this MCP to your client" text, for one client, using its own URL. */
+export function manualInstructions(clientId: string, port: number | undefined): string {
   const info = clientInfo(clientId)
   const name = info?.name ?? clientId
-  const url = profile ? profileUrl(port, profile) : sharedUrl(port)
+  const url = clientUrl(port, clientId)
   const lines = [
     `Add ${brand.displayName} to ${name}`,
     '',
     `File: ${info?.file ?? 'the client MCP config file'}`,
     `Merge this into it${info?.format === 'json' ? ` (keep any other entries under "${info.key}")` : ''}:`,
     '',
-    configSnippet(clientId, port, profile),
+    clientSnippet(clientId, url),
   ]
   if (info?.cli) lines.push('', 'Or run:', '', info.cli(url))
   if (info?.bridge)
@@ -131,7 +147,10 @@ export function manualInstructions(
       '',
       `${name} only runs local commands, so this starts a small stdio bridge to the daemon at ${baseUrl(port)}.`,
     )
-  lines.push('', `Restart ${name} afterwards.`)
+  lines.push(
+    '',
+    `Restart ${name} once. After that, pick its profile in the ${brand.displayName} dashboard (Clients); it switches live.`,
+  )
   return lines.join('\n')
 }
 
@@ -165,20 +184,23 @@ export function agentPrompt({
 ## What ${brand.displayName} is
 ${brand.displayName} is a daemon running on my machine at ${baseUrl(port)}. It runs my MCP servers once and serves them to every AI client through "profiles": named groups of servers and tools, each at its own Streamable HTTP endpoint:
   ${baseUrl(port)}/p/<profile>/mcp
-There is also a shared endpoint, ${sharedUrl(port)}, where the profile is picked by client rules (a glob on the MCP client name) or the default profile. A client that matches neither still connects but waits, with no tools, until a profile is assigned to it (in the dashboard's Clients page or with a rule).
+There is also a shared endpoint, ${sharedUrl(port)}, where the profile is picked by the client's MCP name (client rules) or the default profile. A client that matches nothing still connects but waits, with no tools, until a profile is chosen for it.
 Docs: ${brand.docsUrl}/docs
 
 ## Current state
 Servers: ${servers.length ? servers.join(', ') : '(none yet)'}
 Profiles:
 ${profileLines}
+Each client is set up once with its own URL, ${clientUrl(port, '<client-id>')}. Its profile is then a setting in ${brand.displayName}: switching it moves connected sessions live, with no config edit and no restart. Exactly one profile per client; a client with none switched on follows the default profile.
 
 ## Commands you may use (the CLI is "${cli}"; "${brand.name}" works too if it is installed globally)
 - ${cli} status                                  # daemon, servers, profiles, connected clients
 - ${brand.name} import --yes                         # import MCP servers from installed clients
 - ${brand.name} profile add NAME --servers a,b       # create a profile from servers
-- ${brand.name} client connect ${clientId} --profile NAME   # write the ${brand.name} entry into ${client}'s config
-- ${brand.name} rule add "<glob>" NAME              # route clients on the shared /mcp URL by name
+- ${brand.name} client ls                            # clients and the profile each one uses
+- ${brand.name} client connect ${clientId}                # set ${client} up once (writes its config file)
+- ${brand.name} client use ${clientId} NAME               # switch ${client}'s profile, live (NAME, none or default)
+- ${brand.name} default NAME                         # profile for clients nothing else matches
 - ${brand.name} doctor                               # diagnose problems
 
 ## Goals, step by step
@@ -186,8 +208,9 @@ ${profileLines}
 2. Inspect my existing MCP servers: the ones already in ${brand.displayName}, and the ones configured in my AI clients (${info?.file ?? 'their config files'} and others). Use \`${brand.name} import --yes\` only after I agree.
 3. Propose profiles that fit how I work (for example "personal" and "work"), listing which servers go in each and why. ASK ME before creating, changing or deleting anything.
 4. Once I approve, create the profiles with \`${brand.name} profile add\`.
-5. Connect ${client}: \`${brand.name} client connect ${clientId} --profile NAME\`. This writes one entry named "${brand.name}" into ${info?.file ?? `${client}'s MCP config`} and keeps a backup. Tell me to restart ${client} afterwards.
-6. Verify with \`${brand.name} status\` (and \`${brand.name} doctor\` if anything looks wrong), then summarise what changed.
+5. Set ${client} up once: \`${brand.name} client connect ${clientId}\`. This writes one entry named "${brand.name}" (its own URL) into ${info?.file ?? `${client}'s MCP config`} and keeps a backup. Tell me to restart ${client} once.
+6. Choose its profile: \`${brand.name} client use ${clientId} NAME\`. Later switches apply live; no restart.
+7. Verify with \`${brand.name} status\` (and \`${brand.name} doctor\` if anything looks wrong), then summarise what changed.
 
 Rules: never print or move secrets or tokens; never edit other entries in my client configs; ask before any change.`
 }

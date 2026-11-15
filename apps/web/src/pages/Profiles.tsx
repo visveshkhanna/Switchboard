@@ -44,9 +44,9 @@ import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { del, enc, get, post, put } from '@/lib/api'
+import { del, enc, errorMessage, get, post, put } from '@/lib/api'
 import { candidateServers, PATTERN_RE, setTool, toolState } from '@/lib/profileTools'
-import { keys, useConfig, useServers, useStatus } from '@/lib/queries'
+import { keys, useClients, useConfig, useServers, useStatus } from '@/lib/queries'
 import { Link, navigate } from '@/lib/router'
 import { profileUrl } from '@/lib/snippets'
 import type { Preview, ToolDef } from '@/lib/types'
@@ -77,7 +77,6 @@ const SURFACES: { value: Surface; title: string; body: string }[] = [
 
 export function ProfilesPage() {
   const config = useConfig()
-  const status = useStatus()
   const newButton = (
     <Button onClick={() => navigate('/profiles/new')}>
       <PlusIcon data-icon="inline-start" />
@@ -87,7 +86,7 @@ export function ProfilesPage() {
   return (
     <Page
       title="Profiles"
-      description="A profile is a set of servers and tools served at its own URL. Point each client at the profile it should see."
+      description="A profile is a set of servers and tools. Each client uses one profile, switched on the Clients page; clients nothing else matches use the default profile."
       actions={newButton}
     >
       {config.isPending ? (
@@ -118,7 +117,7 @@ export function ProfilesPage() {
                   <Link to={`/profiles/${name}`} className="hover:underline">
                     {name}
                   </Link>
-                  {config.data.defaultProfile === name && <Badge variant="secondary">default</Badge>}
+                  {config.data.defaultProfile === name && <Badge variant="secondary">Default</Badge>}
                 </CardTitle>
                 <CardDescription>{p.description || 'No description'}</CardDescription>
                 <CardAction>
@@ -131,9 +130,10 @@ export function ProfilesPage() {
                   {p.include.length > 0 && ` · +${p.include.length} included`}
                   {p.exclude.length > 0 && ` · −${p.exclude.length} excluded`}
                 </p>
-                <UrlField url={profileUrl(status.data?.port, name)} label={`${name} URL`} />
+                <ProfileUsage name={name} />
               </CardContent>
-              <CardFooter className="justify-end">
+              <CardFooter className="justify-end gap-2">
+                {config.data.defaultProfile !== name && <MakeDefaultButton name={name} />}
                 <Button
                   size="sm"
                   variant="outline"
@@ -200,6 +200,7 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
   const [newName, setNewName] = useState('')
   const [touched, setTouched] = useState(false)
   const status = useStatus()
+  const config = useConfig()
   const servers = useServers()
   const qc = useQueryClient()
   const set = (patch: Partial<Profile>) => setDraft((d) => ({ ...d, ...patch }))
@@ -267,18 +268,25 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
       }
       actions={
         !isNew && (
-          <ConfirmButton
-            title={`Delete profile “${name}”?`}
-            description="Clients using its URL stop working, and client rules pointing at it are removed. Servers are kept."
-            onConfirm={async () => {
-              await del(`/profiles/${enc(name)}`)
-              void qc.invalidateQueries({ queryKey: keys.config })
-              toast(`Deleted ${name}`)
-              navigate('/profiles')
-            }}
-          >
-            Delete
-          </ConfirmButton>
+          <>
+            {config.data?.defaultProfile === name ? (
+              <Badge variant="secondary">Default</Badge>
+            ) : (
+              <MakeDefaultButton name={name} />
+            )}
+            <ConfirmButton
+              title={`Delete profile “${name}”?`}
+              description="Clients using its URL stop working, and client rules pointing at it are removed. Servers are kept."
+              onConfirm={async () => {
+                await del(`/profiles/${enc(name)}`)
+                void qc.invalidateQueries({ queryKey: keys.config })
+                toast(`Deleted ${name}`)
+                navigate('/profiles')
+              }}
+            >
+              Delete
+            </ConfirmButton>
+          </>
         )
       }
       footer={
@@ -345,7 +353,7 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
                   />
                 </Field>
                 <Field className="md:col-span-2">
-                  <FieldLabel htmlFor="profile-url">URL</FieldLabel>
+                  <FieldLabel htmlFor="profile-url">Pinned URL (advanced)</FieldLabel>
                   {isNew ? (
                     <Input id="profile-url" readOnly value={url} className="font-mono text-xs" />
                   ) : (
@@ -353,7 +361,8 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
                   )}
                   <FieldDescription>
                     {isNew ? 'Available once the profile is created. ' : ''}
-                    <Link to="/clients">Connect a client</Link> to write it into its config.
+                    Always serves this profile. Usually you switch a client's profile on the{' '}
+                    <Link to="/clients">Clients</Link> page instead.
                   </FieldDescription>
                 </Field>
               </FieldGroup>
@@ -945,5 +954,39 @@ function PreviewPanel({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** Make a profile the default for clients nothing else matches. */
+function MakeDefaultButton({ name }: { name: string }) {
+  const qc = useQueryClient()
+  const save = useMutation({
+    mutationFn: () => put('/default-profile', { profile: name }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.config })
+      void qc.invalidateQueries({ queryKey: keys.clients })
+      toast.success(`${name} is now the default profile`)
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  })
+  return (
+    <Button size="sm" variant="outline" disabled={save.isPending} onClick={() => save.mutate()}>
+      {save.isPending && <Spinner data-icon="inline-start" />}
+      Make default
+    </Button>
+  )
+}
+
+/** How many clients use a profile right now. */
+function ProfileUsage({ name }: { name: string }) {
+  const clients = useClients()
+  const using = (clients.data ?? []).filter((c) => c.selection !== 'off' && c.effectiveProfile === name)
+  if (!clients.data) return null
+  return (
+    <p className="text-sm text-muted-foreground">
+      {using.length
+        ? `Used by ${using.map((c) => c.name).join(', ')}`
+        : 'No client uses it yet. Switch it on for a client on the Clients page.'}
+    </p>
   )
 }

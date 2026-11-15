@@ -12,8 +12,8 @@ import {
   SunIcon,
 } from 'lucide-react'
 import { Fragment, useRef } from 'react'
+import { useWaitingClients } from '@/components/client-profiles'
 import { StatusDot } from '@/components/common'
-import { useWaitingCount } from '@/components/seen-clients'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -100,7 +100,7 @@ export function AppSidebar({ live }: { live: LiveState }) {
   const { path } = useLocation()
   const status = useStatus()
   const { setOpenMobile } = useSidebar()
-  const waiting = useWaitingCount()
+  const waiting = useWaitingClients().length
   const everLive = useRef(false)
   if (live === 'live') everLive.current = true
   const text = liveText(live, everLive.current)

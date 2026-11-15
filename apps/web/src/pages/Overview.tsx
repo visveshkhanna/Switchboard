@@ -2,17 +2,10 @@ import { brand } from '@switchboard/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckIcon, PlugZapIcon, XIcon } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
-import {
-  ErrorAlert,
-  InlineCode,
-  LoadingState,
-  Page,
-  SimpleSelect,
-  Snippet,
-  UrlField,
-} from '@/components/common'
+import { WaitingBanners } from '@/components/client-profiles'
+import { ErrorAlert, InlineCode, LoadingState, Page } from '@/components/common'
+import { ConnectAnyClientCard } from '@/components/connect-any'
 import { SetupWithAI } from '@/components/SetupWithAI'
-import { WaitingBanners } from '@/components/seen-clients'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,9 +31,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { put } from '@/lib/api'
 import { relativeTime, useTick } from '@/lib/format'
-import { keys, useClients, useConfig, useServers, useSessions, useSettings, useStatus } from '@/lib/queries'
+import { keys, useClients, useServers, useSessions, useSettings, useStatus } from '@/lib/queries'
 import { Link } from '@/lib/router'
-import { configSnippet, profileUrl, sharedUrl } from '@/lib/snippets'
 import type { Settings } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -136,7 +128,7 @@ export function OverviewPage() {
             />
           </div>
 
-          <ConnectAnything port={status.data.port} />
+          <ConnectAnyClientCard />
 
           <Card>
             <CardHeader>
@@ -192,7 +184,7 @@ export function OverviewPage() {
                               {x.profile}
                             </Link>
                           ) : (
-                            <Link to="/clients#connected" className="text-muted-foreground hover:underline">
+                            <Link to="/clients" className="text-muted-foreground hover:underline">
                               waiting
                             </Link>
                           )}
@@ -278,8 +270,9 @@ function GetStarted() {
 
   if (!status.data || clients.isPending || settings.isPending) return null
   const connected =
-    (clients.data ?? []).some((c) => c.connectedProfile || c.connectedMode === 'auto') ||
-    (sessions.data?.length ?? 0) > 0
+    (clients.data ?? []).some(
+      (c) => c.sessions > 0 || c.lastSeen || (c.preset && !['none', 'foreign'].includes(c.preset.setup)),
+    ) || (sessions.data?.length ?? 0) > 0
 
   const steps: Step[] = [
     {
@@ -313,16 +306,11 @@ function GetStarted() {
       id: 'client',
       title: 'Connect a client',
       done: connected,
-      body: 'Let Switchboard write its entry into Cursor, Claude Code, VS Code and others, or copy a URL.',
+      body: 'Set a client up once on the Clients page; after that, switch its profile with one click, live.',
       action: (
-        <>
-          <Button size="sm" render={<Link to="/clients" />} nativeButton={false}>
-            Clients
-          </Button>
-          <Button size="sm" variant="outline" render={<a href="#connect" />} nativeButton={false}>
-            Copy a URL
-          </Button>
-        </>
+        <Button size="sm" render={<Link to="/clients" />} nativeButton={false}>
+          Set up a client
+        </Button>
       ),
     },
   ]
@@ -419,105 +407,6 @@ function GetStarted() {
             </Item>
           ))}
         </ItemGroup>
-      </CardContent>
-    </Card>
-  )
-}
-
-/** Copy-paste URLs and config for any MCP client. */
-function ConnectAnything({ port }: { port?: number }) {
-  const config = useConfig()
-  const profiles = Object.keys(config.data?.profiles ?? {})
-  const [picked, setPicked] = useState('')
-  const profile = profiles.includes(picked) ? picked : (config.data?.defaultProfile ?? profiles[0] ?? '')
-  const defaultProfile = config.data?.defaultProfile
-
-  return (
-    <Card id="connect" className="scroll-mt-20">
-      <CardHeader>
-        <CardTitle>Connect anything</CardTitle>
-        <CardDescription>
-          Any MCP client that speaks Streamable HTTP can use these. Restart the client after editing its
-          config.
-        </CardDescription>
-        {profiles.length > 1 && (
-          <CardAction>
-            <SimpleSelect
-              size="sm"
-              aria-label="Profile"
-              className="w-40"
-              value={profile}
-              onValueChange={setPicked}
-              options={profiles.map((p) => ({ value: p, label: p }))}
-            />
-          </CardAction>
-        )}
-      </CardHeader>
-      <CardContent className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="flex min-w-0 flex-col gap-3">
-          <h3 className="flex items-center gap-2 text-sm font-medium">
-            Profile URL {profile && <Badge variant="secondary">{profile}</Badge>}
-          </h3>
-          {config.isPending ? (
-            <LoadingState rows={1} />
-          ) : profile ? (
-            <>
-              <UrlField url={profileUrl(port, profile)} label={`${profile} URL`} />
-              <p className="text-xs text-muted-foreground">
-                Always serves this profile, whatever the client is.
-              </p>
-              <Snippet
-                title="mcp.json · Cursor and most clients"
-                code={configSnippet('cursor', port, profile)}
-              />
-            </>
-          ) : (
-            <Empty className="border">
-              <EmptyHeader>
-                <EmptyTitle>No profiles yet</EmptyTitle>
-                <EmptyDescription>Create a profile to get its own URL.</EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button size="sm" render={<Link to="/profiles/new" />} nativeButton={false}>
-                  New profile
-                </Button>
-              </EmptyContent>
-            </Empty>
-          )}
-        </div>
-        <div className="flex min-w-0 flex-col gap-3">
-          <h3 className="text-sm font-medium">Shared endpoint</h3>
-          <UrlField url={sharedUrl(port)} label="Shared endpoint URL" />
-          <p className="text-xs text-muted-foreground">
-            One URL for every client. Switchboard picks the profile from{' '}
-            <Link to="/clients#rules" className="text-primary hover:underline">
-              client rules
-            </Link>{' '}
-            (matched on the client's name), then the{' '}
-            <Link to="/clients#default" className="text-primary hover:underline">
-              default profile
-            </Link>
-            {defaultProfile ? (
-              <>
-                {' '}
-                (now <InlineCode>{defaultProfile}</InlineCode>).
-              </>
-            ) : (
-              ' (none set, so unmatched clients wait until you assign them a profile).'
-            )}
-          </p>
-          <Snippet title="mcp.json · shared endpoint" code={configSnippet('cursor', port, null)} />
-        </div>
-      </CardContent>
-      <CardContent>
-        <p className="text-xs text-muted-foreground">
-          VS Code, Codex, Windsurf, Gemini CLI and Claude Desktop use other formats: see{' '}
-          <Link to="/clients" className="text-primary hover:underline">
-            Clients
-          </Link>
-          , or let <span className="font-medium text-foreground">Set up with AI</span> write the prompt for
-          you.
-        </p>
       </CardContent>
     </Card>
   )

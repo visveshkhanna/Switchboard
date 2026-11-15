@@ -69,24 +69,6 @@ export interface SessionInfo {
   lastSeenAt: string
 }
 
-/** An MCP client the daemon has seen, by its clientInfo.name. */
-export interface SeenClient {
-  name: string
-  version?: string
-  firstSeen: string
-  lastSeen: string
-  lastVia: 'path' | 'header' | 'client-rule' | 'default' | 'unassigned'
-  lastProfile: string | null
-  /** Profile from an exact client rule for this name, if any. */
-  ruleProfile: string | null
-  /** What the shared /mcp URL would resolve to now via rules or the default. */
-  matchedProfile: string | null
-  /** Open sessions waiting for a profile. */
-  waiting: number
-  /** Open sessions. */
-  sessions: number
-}
-
 export interface AuditEvent {
   ts: string
   session?: string
@@ -108,19 +90,38 @@ export interface Preview {
   missingServers: string[]
 }
 
-export interface ClientState {
+export type ClientSetup = 'managed' | 'profile' | 'auto' | 'none' | 'foreign'
+
+/** A client: a preset Switchboard can configure, one that has connected, or both. */
+export interface ClientRow {
   id: string
   name: string
-  installed: boolean
-  configPath: string
-  configExists: boolean
-  connectedProfile?: string
-  /** 'auto' when the entry points at the shared /mcp URL. */
-  connectedMode?: 'profile' | 'auto'
-  foreignEntry?: boolean
-  serverCount: number
-  error?: string
-  docs: string
+  /** The MCP clientInfo.name it last reported. */
+  clientInfoName: string | null
+  version: string | null
+  firstSeen: string | null
+  lastSeen: string | null
+  /** What the user chose: a profile, everything off, or follow the default. */
+  selection: 'default' | 'off' | 'profile'
+  profile: string | null
+  /** What the client gets now. */
+  effectiveProfile: string | null
+  via: 'client' | 'client-rule' | 'default' | 'unassigned' | 'disabled'
+  sessions: number
+  waiting: number
+  /** The client's own URL, /c/<id>/mcp. */
+  url: string
+  preset: null | {
+    installed: boolean
+    configPath: string
+    configExists: boolean
+    docs: string
+    error: string | null
+    setup: ClientSetup
+    pinnedProfile: string | null
+    managedId: string | null
+    otherServers: number
+  }
 }
 
 export interface ImportCandidate {

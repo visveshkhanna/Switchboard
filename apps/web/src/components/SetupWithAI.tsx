@@ -17,8 +17,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useConfig, useStatus } from '@/lib/queries'
 import { agentPrompt, CLIENT_INFO, clientInfo, manualInstructions } from '@/lib/snippets'
 
-export const AUTO = '__auto__'
-
 const clientOptions: Option[] = CLIENT_INFO.map((c) => ({ value: c.id, label: c.name }))
 
 /** "Set up with AI": a prompt to paste into an AI agent, or the plain config entry for one client. */
@@ -54,8 +52,6 @@ function SetupBody() {
   const status = useStatus()
   const config = useConfig()
   const [clientId, setClientId] = useState('claude-code')
-  const profileNames = Object.keys(config.data?.profiles ?? {})
-  const [profile, setProfile] = useState(config.data?.defaultProfile ?? profileNames[0] ?? AUTO)
   const port = status.data?.port
   const info = clientInfo(clientId)
   const [tab, setTab] = useState<string>('agent')
@@ -67,7 +63,7 @@ function SetupBody() {
     profiles: Object.entries(config.data?.profiles ?? {}).map(([name, p]) => ({ name, servers: p.servers })),
     defaultProfile: config.data?.defaultProfile,
   })
-  const manual = manualInstructions(clientId, port, profile === AUTO ? null : profile)
+  const manual = manualInstructions(clientId, port)
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-0 flex-1">
@@ -75,7 +71,7 @@ function SetupBody() {
         <TabsTrigger value="agent">Prompt for an AI agent</TabsTrigger>
         <TabsTrigger value="entry">Config entry only</TabsTrigger>
       </TabsList>
-      <FieldGroup className="mt-2 grid gap-4 sm:grid-cols-2">
+      <FieldGroup className="mt-2 grid gap-4 sm:max-w-sm">
         <Field>
           <FieldLabel htmlFor="setup-client">Client</FieldLabel>
           <SimpleSelect
@@ -83,18 +79,6 @@ function SetupBody() {
             value={clientId}
             onValueChange={setClientId}
             options={clientOptions}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="setup-profile">Profile (for the config entry)</FieldLabel>
-          <SimpleSelect
-            id="setup-profile"
-            value={profile}
-            onValueChange={setProfile}
-            options={[
-              { value: AUTO, label: 'Automatic (client rules / default)' },
-              ...profileNames.map((p) => ({ value: p, label: p })),
-            ]}
           />
         </Field>
       </FieldGroup>

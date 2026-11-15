@@ -1,7 +1,6 @@
 import { slugSchema } from '@switchboard/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeftIcon,
   ClipboardPasteIcon,
   DownloadIcon,
   FlaskConicalIcon,
@@ -24,7 +23,7 @@ import {
   StatusDot,
 } from '@/components/common'
 import { ServerState, SignInButton, SignInCard } from '@/components/server-status'
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
