@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { fromKV, type KV, KVEditor, toKV } from '@/lib/kv'
 import { useSecrets, useServers } from '@/lib/queries'
@@ -50,21 +49,19 @@ export function CredentialsCard({
           profile a separate account to use other keys, or another sign-in; tool names stay the same.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {listed.map((server, i) => {
+      <CardContent className="flex flex-col gap-3">
+        {listed.map((server) => {
           const row = servers.data!.find((r) => r.name === server)!
           return (
-            <div key={server} className="flex flex-col gap-4">
-              {i > 0 && <Separator />}
-              <ServerCredential
-                server={server}
-                config={row.config}
-                profileName={profileName}
-                credential={draft.credentials[server]}
-                instance={row.instances?.find((x) => x.profiles.includes(profileName))}
-                onChange={(c) => update(server, c)}
-              />
-            </div>
+            <ServerCredential
+              key={server}
+              server={server}
+              config={row.config}
+              profileName={profileName}
+              credential={draft.credentials[server]}
+              instance={row.instances?.find((x) => x.profiles.includes(profileName))}
+              onChange={(c) => update(server, c)}
+            />
           )
         })}
       </CardContent>
@@ -107,7 +104,7 @@ function ServerCredential({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       <FieldLabel htmlFor={id}>
         <Field orientation="horizontal">
           <FieldContent className="min-w-0">

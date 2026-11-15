@@ -211,8 +211,8 @@ export function ServersPage() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="hidden text-right align-top font-mono text-xs text-muted-foreground sm:table-cell">
-                      {st?.pid ?? '—'}
+                    <TableCell className="hidden text-right align-top text-muted-foreground sm:table-cell">
+                      {st?.pid ? <span className="font-mono text-xs">{st.pid}</span> : '—'}
                     </TableCell>
                     <TableCell className="text-right align-top">
                       <Switch
@@ -424,7 +424,7 @@ function useServerForm({
               </CardContent>
             </Card>
           )}
-          <FieldGroup className="grid gap-6 md:grid-cols-2">
+          <FieldGroup className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <Field data-invalid={!!nameError || undefined} data-disabled={existing || undefined}>
               <FieldLabel htmlFor={ids.name}>Name</FieldLabel>
               <Input
@@ -584,7 +584,7 @@ function useServerForm({
                 onCheckedChange={(enabled) => set({ enabled })}
               />
             </Field>
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               {!keepRunning && (
                 <Field>
                   <FieldLabel htmlFor={ids.idle}>Idle timeout (seconds)</FieldLabel>
@@ -862,7 +862,7 @@ export function ServerDetail({ name }: { name: string }) {
         </Alert>
       )}
 
-      {enabled && st?.state === 'error' && (
+      {enabled && st?.state === 'error' && !(accounts.length && st.account) && (
         <Alert variant="destructive">
           <TriangleAlertIcon />
           <AlertTitle>

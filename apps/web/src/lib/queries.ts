@@ -97,6 +97,26 @@ export type LiveState = 'connecting' | 'live' | 'offline'
 export function useLiveEvents(qc: QueryClient): LiveState {
   const [state, setState] = useState<LiveState>('connecting')
   useEffect(() => {
+    let source = open()
+    // A page kept in the back/forward cache must not hold its stream open: the browser allows
+    // only six connections per host, and frozen pages holding them make every new page hang.
+    const onHide = () => source.close()
+    const onShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return
+      source = open()
+      void qc.invalidateQueries()
+    }
+    window.addEventListener('pagehide', onHide)
+    window.addEventListener('pageshow', onShow)
+    return () => {
+      window.removeEventListener('pagehide', onHide)
+      window.removeEventListener('pageshow', onShow)
+      source.close()
+    }
+  }, [qc])
+  return state
+
+  function open(): EventSource {
     const source = new EventSource(adminToken ? `/api/events?token=${enc(adminToken)}` : '/api/events', {
       withCredentials: true,
     })
@@ -117,10 +137,22 @@ export function useLiveEvents(qc: QueryClient): LiveState {
     })
     source.addEventListener('server', (e) => {
       const status = parse(e) as ConnectionStatus
+      // `status.name` is an instance: the server itself, or one of its accounts (`github.work`).
       qc.setQueryData<ServerRow[]>(keys.servers, (old) =>
-        old?.map((row) => (row.name === status.name ? { ...row, status } : row)),
+        old?.map((row) => {
+          const ofRow = row.name === (status.server ?? status.name)
+          if (!ofRow) return row
+          return {
+            ...row,
+            status: row.status?.name === status.name || row.name === status.name ? status : row.status,
+            instances: row.instances?.map((i) => (i.id === status.name ? { ...i, status } : i)),
+          }
+        }),
       )
-      if (status.state === 'ready') void qc.invalidateQueries({ queryKey: keys.tools(status.name) })
+      if (status.state === 'ready') {
+        void qc.invalidateQueries({ queryKey: keys.tools(status.name) })
+        if (status.server) void qc.invalidateQueries({ queryKey: keys.tools(status.server) })
+      }
     })
     source.addEventListener('clients', () => {
       void qc.invalidateQueries({ queryKey: keys.clients })
@@ -142,7 +174,6 @@ export function useLiveEvents(qc: QueryClient): LiveState {
       // Rules, choices or the default changed: what each client gets may have too.
       void qc.invalidateQueries({ queryKey: keys.clients })
     })
-    return () => source.close()
-  }, [qc])
-  return state
+    return source
+  }
 }

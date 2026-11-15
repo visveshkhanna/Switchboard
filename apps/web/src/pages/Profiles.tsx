@@ -324,7 +324,7 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
               <CardTitle>General</CardTitle>
             </CardHeader>
             <CardContent>
-              <FieldGroup className="grid gap-4 md:grid-cols-2">
+              <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {isNew && (
                   <Field data-invalid={!!nameError || undefined}>
                     <FieldLabel htmlFor="profile-name">Name</FieldLabel>
@@ -620,7 +620,7 @@ function ToolsCard({
                           </Button>
                         </div>
                         {editing === id && (
-                          <FieldGroup className="mt-2 grid gap-3 rounded-lg bg-muted/50 p-3 md:grid-cols-2">
+                          <FieldGroup className="mt-2 grid grid-cols-1 gap-3 rounded-lg bg-muted/50 p-3 md:grid-cols-2">
                             <Field>
                               <FieldLabel htmlFor={`${id}-name`}>Name shown to clients</FieldLabel>
                               <Input
