@@ -100,6 +100,18 @@ describe('hosted (remote) mode', () => {
       body: '{"client":"phone"}',
     })
     expect(await created.json()).toMatchObject({ url: 'https://sb.example.com/c/phone/mcp' })
+
+    // Clients are on other machines: no local presets, no config file writes.
+    const clients = (await (
+      await fetch(`${t.url}/api/clients`, { headers: { cookie: session } })
+    ).json()) as { preset: unknown }[]
+    expect(clients.some((r) => r.preset)).toBe(false)
+    const connect = await fetch(`${t.url}/api/clients/cursor/connect`, {
+      method: 'POST',
+      headers: { ...json, cookie: session, 'x-switchboard-csrf': '1' },
+      body: '{}',
+    })
+    expect(connect.status).toBe(409)
   })
 
   it('accepts the public host and limits login attempts', async () => {

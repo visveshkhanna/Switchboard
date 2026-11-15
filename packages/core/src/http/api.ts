@@ -346,7 +346,8 @@ export function adminApi(daemon: Daemon): Hono {
   const base = () => daemon.baseUrl
   const clientsView = async () => {
     const cfg = config()
-    const presets = await listClients(daemon.clientEnv)
+    // When hosted, the clients are on other machines: there are no local config files to set up.
+    const presets = daemon.remote ? [] : await listClients(daemon.clientEnv)
     const counts = daemon.sessions.countsByClient()
     const seen = new Map(daemon.seen.list().map((s) => [s.id, s]))
     const ids = new Set([...presets.map((p) => p.id), ...seen.keys(), ...Object.keys(cfg.clients)])
@@ -440,7 +441,15 @@ export function adminApi(daemon: Daemon): Hono {
    * the file again; `{ profile }` pins a profile in the URL instead, and
    * `{ profile: null }` uses the shared /mcp URL.
    */
+  const localOnly = (c: Context) =>
+    c.json(
+      {
+        error: `${brand.displayName} is hosted, so it cannot edit config files on your machine. Copy the client's URL and an API key into the client instead.`,
+      },
+      409,
+    )
   api.post('/clients/:id/connect', async (c) => {
+    if (daemon.remote) return localOnly(c)
     try {
       const id = slugSchema.parse(c.req.param('id'))
       const body = z
@@ -460,6 +469,7 @@ export function adminApi(daemon: Daemon): Hono {
     }
   })
   api.post('/clients/:id/disconnect', async (c) => {
+    if (daemon.remote) return localOnly(c)
     try {
       return c.json({
         ok: true,
@@ -500,6 +510,7 @@ export function adminApi(daemon: Daemon): Hono {
 
   // Import servers from client configs
   api.get('/import', async (c) => {
+    if (daemon.remote) return c.json([])
     const existing = config().servers
     const candidates = await importCandidates(daemon.clientEnv)
     return c.json(candidates.map((x) => ({ ...x, exists: !!existing[x.name] })))
