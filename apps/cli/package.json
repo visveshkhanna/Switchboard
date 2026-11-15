@@ -1,6 +1,6 @@
 {
   "name": "mcp-switchboard",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "One local MCP endpoint for all your AI agents, with per-client profiles, search/execute and code mode.",
   "type": "module",
   "license": "Apache-2.0",

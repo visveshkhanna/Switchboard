@@ -4,6 +4,14 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-15
+
+### Fixed
+
+- The web UI no longer hangs after several full page loads. Pages kept in the browser's back/forward cache held their live update stream open until all of the browser's connections to Switchboard were taken; the stream now closes when a page is left and reopens when it is restored.
+- An account's state (such as `github.work`) now updates live on its server's page.
+- Card footers sit at the bottom of cards of different heights, forms on a server's page no longer run off narrow screens, and an account's error is shown once instead of twice.
+
 ## [0.4.0] - 2026-11-15
 
 One server, many accounts: a profile can run a server with its own API key or OAuth sign-in, so a work and a personal GitHub no longer mean adding GitHub twice.
@@ -113,7 +121,8 @@ The first release.
 - OAuth sign-in for remote MCP servers, with tokens kept in the secret store.
 - The `switchboard` CLI: `up`, `stop`, `status`, `doctor`, `import`, `server`, `profile`, `default`, `rule`, `client`, `secret` and the `connect` stdio bridge.
 
-[Unreleased]: https://github.com/visveshkhanna/Switchboard/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/visveshkhanna/Switchboard/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/visveshkhanna/Switchboard/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/visveshkhanna/Switchboard/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/visveshkhanna/Switchboard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/visveshkhanna/Switchboard/compare/v0.1.0...v0.2.0
