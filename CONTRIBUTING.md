@@ -30,15 +30,18 @@ Switchboard needs Node 24 or later and pnpm 10.
 git clone https://github.com/<you>/Switchboard && cd Switchboard
 corepack enable
 pnpm install
-pnpm build
-node apps/cli/dist/cli.js --version
+pnpm dev
 ```
 
-To try a change without touching the Switchboard you use day to day, give it its own state directory and port:
+| Command | What it does |
+|---|---|
+| `pnpm dev` | runs the daemon from source, restarting on changes, and the web UI with hot reload, and opens it. State lives in `.dev/home` and the daemon listens on port `17690`, so the Switchboard you use day to day is not touched. Ctrl+C stops both. |
+| `pnpm start` | builds everything and runs the built `switchboard up`, with your real `~/.switchboard`. |
+| `pnpm switchboard <command>` | runs the built CLI, for example `pnpm switchboard status`. |
+| `pnpm dev:docs` | runs the docs site (install it first with `npm --prefix apps/docs ci`). |
+| `pnpm build`, `pnpm check` | build everything; lint, type-check and test. |
 
-```bash
-SWITCHBOARD_HOME=/tmp/switchboard-dev SWITCHBOARD_PORT=17690 pnpm --filter mcp-switchboard dev
-```
+`SWITCHBOARD_HOME` and `SWITCHBOARD_PORT` override the dev state directory and port.
 
 ### Layout
 

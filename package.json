@@ -7,8 +7,11 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "start": "pnpm build && node apps/cli/dist/cli.js up",
+    "switchboard": "node apps/cli/dist/cli.js",
+    "dev:docs": "npm --prefix apps/docs run dev",
     "build": "turbo run build",
-    "dev": "turbo run dev --filter=mcp-switchboard --filter=@switchboard/web",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "biome check .",

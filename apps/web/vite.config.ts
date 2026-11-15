@@ -49,7 +49,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), devToken()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: {
-    proxy: { '/api': proxy, '/p': proxy, '/mcp': proxy, '/healthz': proxy },
+    proxy: { '/api': proxy, '/p/': proxy, '/c/': proxy, '/mcp': proxy, '/oauth': proxy, '/healthz': proxy },
   },
   build: { outDir: 'dist', emptyOutDir: true },
 })

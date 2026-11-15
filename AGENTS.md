@@ -21,12 +21,14 @@ Workspace packages (`@switchboard/*`) are private and consumed as TypeScript sou
 
 ```bash
 pnpm install
+pnpm dev            # daemon from source + web UI with hot reload (.dev/home, port 17690)
+pnpm start          # build and run the real CLI against ~/.switchboard
+pnpm switchboard status   # run the built CLI
 pnpm build          # turbo: every package
 pnpm test           # vitest in every package
 pnpm typecheck      # tsc --noEmit in every package
 pnpm lint           # biome check
 pnpm biome check --write .   # fix formatting and imports
-pnpm --filter mcp-switchboard dev   # run the daemon from source
 ```
 
 Run `pnpm check` (lint, typecheck, test) before every commit.

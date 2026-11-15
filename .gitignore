@@ -1,6 +1,7 @@
 # Local working notes and cloned reference repos (never committed)
 /dump/
 /ref/
+/.dev/
 
 # Dependencies and build output
 node_modules/
