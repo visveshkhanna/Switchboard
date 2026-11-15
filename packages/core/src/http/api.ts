@@ -7,6 +7,7 @@ import {
   configSchema,
   profileSchema,
   serverConfigSchema,
+  serverInstances,
   settingsSchema,
   slugSchema,
 } from '@switchboard/shared'
@@ -105,12 +106,23 @@ export function adminApi(daemon: Daemon): Hono {
   // Servers
   api.get('/servers', (c) => {
     const statuses = new Map(daemon.upstream.statuses().map((s) => [s.name, s]))
+    const instances = serverInstances(config())
     return c.json(
-      Object.entries(config().servers).map(([name, server]) => ({
-        name,
-        config: server,
-        status: statuses.get(name),
-      })),
+      Object.entries(config().servers).map(([name, server]) => {
+        const own = instances.filter((i) => i.server === name)
+        return {
+          name,
+          config: server,
+          // The default instance, or the first account when every profile has its own.
+          status: statuses.get(own[0]?.id ?? name),
+          instances: own.map((i) => ({
+            id: i.id,
+            account: i.account,
+            profiles: i.profiles,
+            status: statuses.get(i.id),
+          })),
+        }
+      }),
     )
   })
   api.put('/servers/:name', async (c) => {
@@ -133,6 +145,7 @@ export function adminApi(daemon: Daemon): Hono {
         delete draft.servers[name]
         for (const profile of Object.values(draft.profiles)) {
           profile.servers = profile.servers.filter((s) => s !== name)
+          delete profile.credentials[name]
         }
         return draft
       })
@@ -141,7 +154,14 @@ export function adminApi(daemon: Daemon): Hono {
       return problem(c, error)
     }
   })
-  api.get('/servers/:name/tools', (c) => c.json(daemon.catalog.get(c.req.param('name'))?.tools ?? []))
+  // :name is a server or one of its instances (`github.work`); a server falls back to its first account.
+  api.get('/servers/:name/tools', (c) => {
+    const name = c.req.param('name')
+    const id = daemon.catalog.has(name)
+      ? name
+      : serverInstances(config()).find((i) => i.server === name && daemon.catalog.has(i.id))?.id
+    return c.json((id && daemon.catalog.get(id)?.tools) || [])
+  })
   api.get('/servers/:name/logs', (c) => c.json(daemon.upstream.get(c.req.param('name'))?.stderr ?? []))
   /** Start a sign-in for a server that uses OAuth; returns the URL to open. */
   api.post('/servers/:name/auth', async (c) => {
@@ -223,7 +243,7 @@ export function adminApi(daemon: Daemon): Hono {
       if (body) draft.profiles[name] = profileSchema.parse(body)
       if (!draft.profiles[name]) return c.json({ error: 'Unknown profile' }, 404)
       const view = buildProfileView(name, draft, daemon.catalog)
-      await daemon.upstream.ensureCatalog(view.servers)
+      await daemon.upstream.ensureCatalog(view.instances)
       const fresh = buildProfileView(name, draft, daemon.catalog)
       const surfaceKind = pickSurface(fresh)
       const surface = daemon.surfaces[surfaceKind]
@@ -239,7 +259,7 @@ export function adminApi(daemon: Daemon): Hono {
         })),
         listed: listed.map((t) => t.name),
         tokens: { listed: estimateTokens(listed), passthrough: estimateTokens(all) },
-        missingServers: fresh.servers.filter((s) => !daemon.catalog.get(s)),
+        missingServers: fresh.servers.filter((_, i) => !daemon.catalog.get(fresh.instances[i]!)),
       })
     } catch (error) {
       return problem(c, error)

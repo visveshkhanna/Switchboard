@@ -44,14 +44,20 @@ export class Gateway {
     ctx: CallContext,
   ): Promise<CallToolResult> {
     const started = performance.now()
-    const entry = this.find(ctx.profile, name)
+    let entry = this.find(ctx.profile, name)
+    if (!entry) {
+      // An account that has not run yet has no tool list; start it and look again before refusing.
+      const view = this.views.get(ctx.profile)
+      await this.upstream.ensureCatalog(view.instances)
+      entry = this.find(ctx.profile, name)
+    }
     if (!entry) {
       const result = errorResult(`Tool "${name}" is not available in profile "${ctx.profile}".`)
       this.#record(name, ctx, started, false, 'not in profile')
       return result
     }
-    const connection = this.upstream.get(entry.server)
-    if (!connection) return errorResult(`Server "${entry.server}" is not configured.`)
+    const connection = this.upstream.get(entry.instance)
+    if (!connection) return errorResult(`Server "${entry.instance}" is not configured.`)
     try {
       const result = await connection.callTool(entry.tool, args, {
         signal: ctx.signal,

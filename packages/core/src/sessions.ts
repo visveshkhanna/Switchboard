@@ -172,7 +172,15 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
     server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
       session.touch()
       if (!session.profile) return errorResult(this.#waitingMessage(session))
-      const current = gateway.view(session.profile)
+      let current = gateway.view(session.profile)
+      // After a switch, the new profile's accounts may not have listed their tools yet.
+      if (
+        !current.byName.has(request.params.name) &&
+        current.instances.some((i) => !current.tools.some((t) => t.instance === i))
+      ) {
+        await this.deps.upstream.ensureCatalog(current.instances)
+        current = gateway.view(session.profile)
+      }
       return this.surfaceFor(current).callTool(request.params.name, request.params.arguments, current, {
         profile: session.profile,
         session: session.id,
@@ -282,7 +290,7 @@ export class SessionRegistry extends EventEmitter<SessionEvents> {
 
   async #viewWithCatalog(profile: string): Promise<ProfileView> {
     const view = this.deps.gateway.view(profile)
-    const missing = view.servers.filter((s) => !view.tools.some((t) => t.server === s))
+    const missing = view.instances.filter((i) => !view.tools.some((t) => t.instance === i))
     if (missing.length) {
       const wait = this.deps.upstream.ensureCatalog(missing)
       await Promise.race([wait, new Promise((resolve) => setTimeout(resolve, FIRST_LIST_WAIT_MS).unref())])

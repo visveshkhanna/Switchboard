@@ -29,6 +29,14 @@ server.registerTool('fail', { description: 'Always fails' }, async () => ({
   content: [{ type: 'text', text: 'it failed' }],
 }))
 
+// Only on request, so other tests' tool counts stay put.
+if (process.argv.includes('--env-tool'))
+  server.registerTool(
+    'env',
+    { description: 'Value of an environment variable', inputSchema: { key: z.string() } },
+    async ({ key }) => ({ content: [{ type: 'text', text: process.env[key] ?? '' }] }),
+  )
+
 server.registerTool('pid', { description: 'Process id of this server' }, async () => ({
   content: [{ type: 'text', text: String(process.pid) }],
 }))

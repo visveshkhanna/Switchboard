@@ -12,7 +12,7 @@ import {
   type Tool,
   ToolListChangedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js'
-import { brand, type ServerConfig } from '@switchboard/shared'
+import { brand, parseInstanceId, type ServerConfig } from '@switchboard/shared'
 import type { Catalog } from '../catalog.ts'
 import type { Logger } from '../logger.ts'
 import { resolveSecretList, resolveSecrets, type SecretBackend } from '../secrets.ts'
@@ -21,7 +21,11 @@ import { StoredOAuthProvider } from './oauth.ts'
 export type ConnectionState = 'stopped' | 'starting' | 'ready' | 'error' | 'needs-auth'
 
 export interface ConnectionStatus {
+  /** The instance id: the server's name, or `<server>.<account>` for a profile's own account. */
   name: string
+  server: string
+  /** The account, or null for the server's default instance. */
+  account: string | null
   transport: ServerConfig['transport']
   enabled: boolean
   state: ConnectionState
@@ -130,8 +134,11 @@ export class UpstreamConnection extends EventEmitter<ConnectionEvents> {
     const entry = this.deps.catalog.get(this.name)
     const pid =
       this.#transport instanceof StdioClientTransport ? (this.#transport.pid ?? undefined) : undefined
+    const { server, account } = parseInstanceId(this.name)
     return {
       name: this.name,
+      server,
+      account,
       transport: this.config.transport,
       enabled: this.config.enabled,
       state: this.#state,

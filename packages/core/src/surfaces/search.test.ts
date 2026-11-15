@@ -5,6 +5,7 @@ import { ToolIndex, tokenize } from './search.ts'
 function entry(server: string, tool: string, description: string): ToolEntry {
   return {
     server,
+    instance: server,
     tool,
     id: `${server}.${tool}`,
     name: `${server}__${tool}`,

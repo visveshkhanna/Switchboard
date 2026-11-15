@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { accountConflicts } from './instances.ts'
 
 /** Names of servers and profiles: used in URLs and tool names. */
 export const slugSchema = z
@@ -69,6 +70,20 @@ export const toolOverrideSchema = z.object({
   description: z.string().optional(),
 })
 
+/**
+ * A profile's own credentials for a server: environment variables (stdio
+ * servers) and headers (HTTP servers) merged over the server's, usually
+ * secret:// references. The server then runs as a separate account for
+ * this profile, with its own process and its own OAuth sign-in.
+ */
+export const credentialSchema = z.object({
+  /** Name of the account; defaults to the profile's name. Profiles naming the same account share it. */
+  account: slugSchema.optional(),
+  env: stringRecord.default({}),
+  headers: stringRecord.default({}),
+})
+export type Credential = z.infer<typeof credentialSchema>
+
 export const profileSchema = z.object({
   description: z.string().optional(),
   /** Every tool of these servers is included. */
@@ -83,6 +98,8 @@ export const profileSchema = z.object({
   /** With `auto`, profiles with more tools than this use the `meta` surface. */
   autoThreshold: z.number().int().min(0).default(40),
   budgets: budgetsSchema.default(budgetsSchema.parse({})),
+  /** Keyed by server name: this profile's own credentials for that server. */
+  credentials: z.record(slugSchema, credentialSchema).default({}),
 })
 export type Profile = z.infer<typeof profileSchema>
 export type ProfileInput = z.input<typeof profileSchema>
@@ -145,6 +162,13 @@ export function parseConfig(input: unknown): Config {
     if (!config.profiles[rule.profile])
       problems.push(`client rule "${rule.client}" points at unknown profile "${rule.profile}"`)
   }
+  for (const [name, profile] of Object.entries(config.profiles)) {
+    for (const server of Object.keys(profile.credentials)) {
+      if (!config.servers[server])
+        problems.push(`profile "${name}" has credentials for unknown server "${server}"`)
+    }
+  }
+  problems.push(...accountConflicts(config))
   if (config.defaultProfile && !config.profiles[config.defaultProfile]) {
     problems.push(`defaultProfile "${config.defaultProfile}" does not exist`)
   }

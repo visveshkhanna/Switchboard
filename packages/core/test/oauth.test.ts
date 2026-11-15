@@ -103,6 +103,30 @@ describe('OAuth for remote servers', () => {
     expect(JSON.parse(secrets['oauth.remote.tokens']).access_token).toBe('token-1')
   })
 
+  it('keeps a separate sign-in for each account', async () => {
+    const { base, server } = await startProtectedServer()
+    remote = server
+    t = await startDaemon({
+      servers: { remote: { transport: 'http', url: `${base}/mcp` } },
+      profiles: {
+        work: { servers: ['remote'], credentials: { remote: {} } },
+        personal: { servers: ['remote'], credentials: { remote: {} } },
+      },
+    })
+    const auth = await fetch(`${t.url}/api/servers/remote.work/auth`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${t.daemon.adminToken}` },
+    }).then((r) => r.json() as Promise<{ authUrl?: string }>)
+    const consent = await fetch(auth.authUrl!, { redirect: 'manual' })
+    expect(await (await fetch(consent.headers.get('location')!)).text()).toContain('Signed in to remote.work')
+
+    expect(t.daemon.upstream.get('remote.work')!.status().state).toBe('ready')
+    await t.daemon.upstream.sync('remote.personal')
+    expect(t.daemon.upstream.get('remote.personal')!.status().state).toBe('needs-auth')
+    const secrets = JSON.parse(await readFile(join(t.home, 'secrets.json'), 'utf8'))
+    expect(Object.keys(secrets).filter((k) => k.endsWith('.tokens'))).toEqual(['oauth.remote.work.tokens'])
+  })
+
   it('waits for sign-in instead of restarting, and says how to sign in', async () => {
     const { base, server } = await startProtectedServer()
     remote = server

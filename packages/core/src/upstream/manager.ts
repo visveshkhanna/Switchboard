@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import type { Config } from '@switchboard/shared'
+import { type Config, serverInstances } from '@switchboard/shared'
 import type { Catalog } from '../catalog.ts'
 import type { Logger } from '../logger.ts'
 import type { SecretBackend } from '../secrets.ts'
@@ -9,7 +9,10 @@ export interface ManagerEvents {
   status: [status: ConnectionStatus]
 }
 
-/** Owns one UpstreamConnection per configured server and keeps them in line with the config. */
+/**
+ * Owns one UpstreamConnection per server instance (a server, or a profile's
+ * own account of it) and keeps them in line with the config.
+ */
 export class UpstreamManager extends EventEmitter<ManagerEvents> {
   #connections = new Map<string, UpstreamConnection>()
   #syncing = new Map<string, Promise<void>>()
@@ -40,23 +43,24 @@ export class UpstreamManager extends EventEmitter<ManagerEvents> {
 
   /** Add, replace and remove connections to match the config. */
   async apply(config: Config): Promise<void> {
+    const instances = new Map(serverInstances(config).map((i) => [i.id, i]))
     const stops: Promise<void>[] = []
-    for (const [name, connection] of this.#connections) {
-      const next = config.servers[name]
-      if (!next || configHash(next) !== connection.hash) {
-        this.#connections.delete(name)
+    for (const [id, connection] of this.#connections) {
+      const next = instances.get(id)
+      if (!next || configHash(next.config) !== connection.hash) {
+        this.#connections.delete(id)
         stops.push(connection.stop())
-        if (!next) this.deps.catalog.delete(name)
+        if (!next) this.deps.catalog.delete(id)
       }
     }
-    for (const [name, server] of Object.entries(config.servers)) {
-      if (this.#connections.has(name)) continue
-      const connection = new UpstreamConnection(name, server, {
+    for (const [id, instance] of instances) {
+      if (this.#connections.has(id)) continue
+      const connection = new UpstreamConnection(id, instance.config, {
         ...this.deps,
-        log: this.deps.log.child(name),
+        log: this.deps.log.child(id),
       })
       connection.on('status', (status) => this.emit('status', status))
-      this.#connections.set(name, connection)
+      this.#connections.set(id, connection)
     }
     await Promise.all(stops)
   }

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { Tool } from '@modelcontextprotocol/sdk/types.js'
-import { type Config, matchGlob, matchToolPattern, type Profile } from '@switchboard/shared'
+import { type Config, instanceFor, matchGlob, matchToolPattern, type Profile } from '@switchboard/shared'
 import type { Catalog } from '../catalog.ts'
 
 /** Many clients reject tool names longer than 64 characters. */
@@ -8,6 +8,8 @@ export const MAX_TOOL_NAME = 64
 
 export interface ToolEntry {
   server: string
+  /** The instance that serves this profile: the server's name, or `<server>.<account>`. */
+  instance: string
   /** The tool's name on its server. */
   tool: string
   /** `server.tool`, the canonical id used in config and logs. */
@@ -25,6 +27,8 @@ export interface ProfileView {
   byId: Map<string, ToolEntry>
   /** Servers this profile can draw tools from. */
   servers: string[]
+  /** The instance this profile uses for each of its servers, in the same order. */
+  instances: string[]
   /** Server instructions, for servers that have them. */
   instructions: Map<string, string>
 }
@@ -64,9 +68,12 @@ export function buildProfileView(name: string, config: Config, catalog: Catalog)
   const byId = new Map<string, ToolEntry>()
   const instructions = new Map<string, string>()
 
-  for (const server of servers.sort()) {
-    const entry = catalog.get(server)
-    if (!entry) continue
+  servers.sort()
+  const instances = servers.map((server) => instanceFor(config, name, server))
+  servers.forEach((server, index) => {
+    const instance = instances[index]!
+    const entry = catalog.get(instance)
+    if (!entry) return
     if (entry.instructions) instructions.set(server, entry.instructions)
     for (const tool of entry.tools) {
       const included =
@@ -84,13 +91,13 @@ export function buildProfileView(name: string, config: Config, catalog: Catalog)
         name: exposed,
         description: override?.description ?? tool.description,
       }
-      const toolEntry: ToolEntry = { server, tool: tool.name, id, name: exposed, definition }
+      const toolEntry: ToolEntry = { server, instance, tool: tool.name, id, name: exposed, definition }
       tools.push(toolEntry)
       byName.set(exposed, toolEntry)
       byId.set(id, toolEntry)
     }
-  }
-  return { name, profile, tools, byName, byId, servers, instructions }
+  })
+  return { name, profile, tools, byName, byId, servers, instances, instructions }
 }
 
 /** Caches views until the config or the catalog changes. */
