@@ -7,9 +7,13 @@ Switchboard runs on your machine for your own clients. Its defaults keep it that
 
 ## Local only
 
-- The daemon binds to `127.0.0.1`, so other machines on your network cannot reach it. `switchboard up --host` changes that; only use it if you know you need to.
-- Every request's `Host` header must name a loopback address (`localhost`, `127.0.0.1` or `[::1]`), and a browser's `Origin` must be the daemon's own; anything else gets `403`. A web page you visit cannot use DNS rebinding to talk to the daemon through your browser.
+- The daemon binds to `127.0.0.1`, so other machines on your network cannot reach it. `--host` or `--public-url` changes that and turns on [hosted mode](#hosted-mode).
+- Every request's `Host` header must name a loopback address (`localhost`, `127.0.0.1` or `[::1]`) or the public URL's host, and a browser's `Origin` must be the daemon's own; anything else gets `403`. A web page you visit cannot use DNS rebinding to talk to the daemon through your browser. Only `GET /healthz`, which says nothing but that Switchboard is up, answers any host, for hosting platforms' health checks.
 - There is no account, no cloud service and no telemetry.
+
+## Hosted mode
+
+When Switchboard listens beyond loopback or has a public URL, every MCP request needs an API key (`Authorization: Bearer sbk_…`), stored only as a sha256 hash and shown once, and each key acts as one client. The web UI needs the admin password, kept as an scrypt hash or given in `SWITCHBOARD_ADMIN_PASSWORD`; signing in sets an `HttpOnly`, `SameSite=Strict` cookie (`Secure` over https), and changes made with the cookie also need a custom header that cross-site forms cannot send. Sign-in attempts are rate-limited by connection address. Switchboard refuses to start hosted without a password. Put it behind TLS. See [Self-hosting](/docs/guides/self-hosting).
 
 ## The admin API
 

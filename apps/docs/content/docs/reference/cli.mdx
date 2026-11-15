@@ -39,6 +39,11 @@ switchboard connect [--client ID|--profile NAME]  stdio bridge for stdio-only cl
 
 switchboard activity [on|off]                     keep a log of tool calls for activity charts
 
+switchboard up --host 0.0.0.0 --public-url URL    hosted mode (see Self-hosting)
+switchboard admin password                        set the web UI password for hosted mode
+switchboard key create CLIENT [--label TEXT]      API key for a client
+switchboard key ls | rm ID
+
 switchboard --version
 switchboard --help
 ```
@@ -111,6 +116,10 @@ switchboard activity on
 ```
 
 Turns the activity log on or off, or shows the setting. When it is on, every tool call's name, client, profile, duration and success (never its arguments or results) is appended to `~/.switchboard/audit.jsonl` and kept for `settings.retentionDays` days, 30 by default. The web UI's Activity page charts it.
+
+## admin, key
+
+`admin password` sets the password the web UI asks for in [hosted mode](/docs/guides/self-hosting), stored as an scrypt hash in `~/.switchboard/admin.json`. `key create` makes an API key for a client and shows it once; `key ls` lists keys with when they were last used; `key rm` revokes one. When the daemon is running these go through it, so new keys work at once.
 
 ## Environment
 

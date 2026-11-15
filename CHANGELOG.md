@@ -10,6 +10,10 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 - `config.clients` stores each client's profile; `GET /api/clients` lists known and connected clients together, and `PUT /api/clients/:id/profile` switches one.
 - The first profile created becomes the default profile, and deleting the default makes another profile the default.
 - `switchboard connect --client <id>` for stdio-only clients.
+- Hosted mode: listening beyond loopback or setting `--public-url` requires an API key from MCP clients (`switchboard key create <client>`; each key acts as one client) and the admin password in the web UI (`SWITCHBOARD_ADMIN_PASSWORD` or `switchboard admin password`). See the Self-hosting guide.
+- A Docker image, `ghcr.io/visveshkhanna/switchboard`, for `linux/amd64` and `linux/arm64`, with Node, Python and uv, plus Docker Compose (with HTTPS from Caddy) and Fly.io templates in `deploy/`.
+- `env://NAME` in a server's env, args or headers reads an environment variable of Switchboard, for hosting platforms' secrets.
+- `pnpm dev`, `pnpm start` and `pnpm switchboard` for working on Switchboard from a checkout.
 
 ### Changed
 

@@ -1,0 +1,100 @@
+---
+title: Self-hosting
+description: Run Switchboard on a server, with Docker, Fly.io or any VPS, and use it from every machine and from cloud agents.
+---
+
+Switchboard normally runs on your machine. Hosted on a server, one setup serves your laptop, your desktop, dev containers and cloud agents that can only reach MCP servers over HTTPS.
+
+## Hosted mode
+
+Switchboard switches to **hosted mode** when it listens beyond this machine (`--host 0.0.0.0`) or has a public URL (`--public-url`). In hosted mode:
+
+- **MCP clients need an API key**, sent as `Authorization: Bearer sbk_…`. Each key belongs to a client, so the client's [profile](/docs/concepts/profile-resolution) applies and is switched on the Clients page like any other.
+- **The web UI asks for the admin password** and keeps you signed in with a secure cookie. The page no longer carries the admin token.
+- **The public URL is used** for client URLs, snippets and OAuth sign-in callbacks, and its host passes the host check.
+- Switchboard **refuses to start** without an admin password.
+
+| Variable | Flag | Meaning |
+|---|---|---|
+| `SWITCHBOARD_PUBLIC_URL` | `--public-url` | the URL people and clients use, e.g. `https://switchboard.example.com` |
+| `SWITCHBOARD_HOST` | `--host` | the address to listen on; `0.0.0.0` in containers |
+| `SWITCHBOARD_PORT` | `--port` | the port, `7690` by default |
+| `SWITCHBOARD_ADMIN_PASSWORD` | | the web UI password. Or run `switchboard admin password` once, which stores an scrypt hash |
+| `SWITCHBOARD_HOME` | | the state directory, `/data` in the Docker image |
+
+Always put TLS in front: the templates below do it for you.
+
+## Docker
+
+```bash
+docker run -d --name switchboard -p 7690:7690 -v switchboard:/data \
+  -e SWITCHBOARD_ADMIN_PASSWORD='a long password' \
+  -e SWITCHBOARD_PUBLIC_URL=https://switchboard.example.com \
+  ghcr.io/visveshkhanna/switchboard:latest
+```
+
+The image has Node, Python and uv, so servers started with `npx` or `uvx` work. State, including API keys and secrets, lives in the `/data` volume. Images are built for `linux/amd64` and `linux/arm64` and carry build provenance.
+
+## Docker Compose with HTTPS
+
+[`deploy/compose`](https://github.com/visveshkhanna/Switchboard/tree/main/deploy/compose) runs Switchboard behind [Caddy](https://caddyserver.com), which gets a certificate automatically:
+
+```bash
+cd deploy/compose
+cp .env.example .env      # set DOMAIN and SWITCHBOARD_ADMIN_PASSWORD
+docker compose up -d
+```
+
+Point the domain's DNS at the server first.
+
+## Fly.io
+
+[`deploy/fly/fly.toml`](https://github.com/visveshkhanna/Switchboard/tree/main/deploy/fly) deploys the image with a volume:
+
+```bash
+cd deploy/fly
+fly launch --copy-config --no-deploy --name my-switchboard
+fly volumes create switchboard_data --size 1
+fly secrets set SWITCHBOARD_ADMIN_PASSWORD='a long password'
+# set SWITCHBOARD_PUBLIC_URL in fly.toml to https://my-switchboard.fly.dev
+fly deploy
+```
+
+Run a single machine: sessions are kept in memory.
+
+## Connecting clients
+
+Create a key for each client, on the Clients page (**Create API key**) or with the CLI on the server:
+
+```bash
+docker exec switchboard switchboard key create laptop --label "MacBook"
+```
+
+The key is shown once. Add it to the client:
+
+```json
+{
+  "mcpServers": {
+    "switchboard": {
+      "url": "https://switchboard.example.com/c/laptop/mcp",
+      "headers": { "Authorization": "Bearer sbk_..." }
+    }
+  }
+}
+```
+
+`switchboard key ls` lists keys with when they were last used, and `switchboard key rm <id>` revokes one.
+
+## Secrets on a server
+
+Store secrets in the web UI as usual (they go to `/data/secrets.json`, readable only by the Switchboard user), or use your platform's secrets: `env://NAME` in a server's env, args or headers reads the environment variable `NAME` of the Switchboard process. For example, with `fly secrets set GITHUB_TOKEN=…`:
+
+```json
+"env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "env://GITHUB_TOKEN" }
+```
+
+## What to know
+
+- Servers run on the host. Servers that need your local files, browser or desktop apps will not work remotely; HTTP servers and API-based stdio servers do.
+- Anyone with the admin password controls which commands the server runs. Use a long password.
+- OAuth sign-in to remote MCP servers works hosted too: the callback goes to your public URL.
