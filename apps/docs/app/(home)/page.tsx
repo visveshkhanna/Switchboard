@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { ArrowRight, Boxes, Code, Layers, Lock, MousePointerClick, Zap } from 'lucide-react';
+import { ArrowRight, Boxes, Cloud, Code, Layers, ToggleRight } from 'lucide-react';
 import { CopyCommand } from '@/components/copy-command';
+import { JackField } from '@/components/jack-field';
+import { PatchPanel } from '@/components/patch-panel';
 import { githubUrl, installCommand } from '@/lib/shared';
 
 const features: { icon: ReactNode; title: string; body: string; href: string }[] = [
@@ -14,14 +16,14 @@ const features: { icon: ReactNode; title: string; body: string; href: string }[]
   {
     icon: <Boxes className="size-5" />,
     title: 'One process per server',
-    body: 'Every client shares one copy of each MCP server, started on first use and stopped when idle.',
+    body: 'Every client shares one copy of each MCP server, started when added, stopped when idle, restarted if it crashes.',
     href: '/docs/concepts/profiles#shared-servers',
   },
   {
-    icon: <Zap className="size-5" />,
-    title: 'Instant tool lists',
-    body: 'Tool catalogs are cached, so clients see their tools at once, even when no server is running.',
-    href: '/docs/concepts/profiles#shared-servers',
+    icon: <ToggleRight className="size-5" />,
+    title: 'Switch profiles live',
+    body: 'Set a client up once, then flip its profile with one click. Its tools change at once, no restart.',
+    href: '/docs/concepts/profile-resolution',
   },
   {
     icon: <Code className="size-5" />,
@@ -30,24 +32,24 @@ const features: { icon: ReactNode; title: string; body: string; href: string }[]
     href: '/docs/concepts/code-mode',
   },
   {
-    icon: <MousePointerClick className="size-5" />,
-    title: 'One-click client connect',
-    body: 'Switchboard writes the MCP entry into Cursor, Claude Code, VS Code and others, and imports the servers you have.',
+    icon: <Layers className="size-5" />,
+    title: 'Any client',
+    body: 'Cursor, Claude Code, VS Code, Codex and more are set up for you; any other MCP client appears when it connects.',
     href: '/docs/guides/connect-clients',
   },
   {
-    icon: <Lock className="size-5" />,
-    title: 'Local & private',
-    body: 'Binds to loopback and keeps secrets in your OS keychain when available. No account, no cloud.',
-    href: '/docs/security',
+    icon: <Cloud className="size-5" />,
+    title: 'Local first, hostable',
+    body: 'Runs on your machine with secrets in your keychain, or on a server with API keys, from one Docker image.',
+    href: '/docs/guides/self-hosting',
   },
 ];
 
 export default function HomePage() {
   return (
     <main className="flex flex-1 flex-col overflow-x-clip">
-      <section className="relative flex flex-col items-center gap-8 px-4 pb-16 pt-20 text-center md:pt-28">
-        <div aria-hidden className="hero-grid pointer-events-none absolute inset-0 -z-10" />
+      <section className="relative isolate flex flex-col items-center gap-8 px-4 pb-12 pt-20 text-center md:pt-28">
+        <JackField className="jack-field pointer-events-none absolute inset-0 -z-10 size-full" />
         <Link
           href="/docs/changelog"
           className="rounded-full border bg-fd-card px-3 py-1 text-xs text-fd-muted-foreground transition-colors hover:text-fd-foreground"
@@ -55,11 +57,11 @@ export default function HomePage() {
           Open source · local-first MCP gateway
         </Link>
         <h1 className="max-w-3xl text-4xl font-semibold tracking-tighter md:text-6xl">
-          One local MCP endpoint for all your AI agents
+          One MCP endpoint for all your AI agents
         </h1>
         <p className="max-w-2xl text-lg text-fd-muted-foreground">
-          Group your MCP servers into profiles and point Cursor, Claude Code, VS Code and every other agent at{' '}
-          <code className="font-mono text-fd-foreground">localhost:7690</code>. Each one sees only the tools it should.
+          Group your MCP servers into profiles, give every agent exactly the tools it should see, and switch any
+          client&apos;s profile with one click, live.
         </p>
         <CopyCommand command={installCommand} />
         <div className="flex flex-wrap items-center justify-center gap-3">
@@ -76,7 +78,12 @@ export default function HomePage() {
             GitHub
           </a>
         </div>
-        <figure id="demo" className="w-full max-w-4xl scroll-mt-24">
+        <PatchPanel />
+      </section>
+
+      <section className="mx-auto flex w-full max-w-5xl flex-col items-center gap-6 px-4 pb-20 text-center">
+        <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">See it in action</h2>
+        <figure id="demo" className="w-full scroll-mt-24">
           <video
             src="/demo/switchboard.mp4"
             poster="/demo/poster.jpg"

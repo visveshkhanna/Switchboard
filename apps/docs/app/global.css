@@ -30,6 +30,14 @@ pre {
   font-family: var(--font-mono);
 }
 
+/* Fade the hero's jack field out towards the edges, and keep it quiet behind the headline. */
+.jack-field {
+  mask-image:
+    radial-gradient(ellipse 34% 20% at 50% 22%, transparent 35%, black 100%),
+    radial-gradient(ellipse 75% 65% at 50% 32%, black 35%, transparent 78%);
+  mask-composite: intersect;
+}
+
 /* A faint grid behind the home page hero. */
 .hero-grid {
   background-image:
