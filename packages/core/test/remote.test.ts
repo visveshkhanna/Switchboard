@@ -115,7 +115,17 @@ describe('hosted (remote) mode', () => {
         req.end()
       })
     expect(await statusWithHost('sb.example.com')).toBe(200)
-    expect(await statusWithHost('evil.example')).toBe(403)
+    // Health checks pass with any Host; everything else does not.
+    expect(await statusWithHost('evil.example')).toBe(200)
+    const apiWithHost = await new Promise<number>((resolve, reject) => {
+      const req = request(`${t.url}/api/status`, { headers: { host: 'evil.example' } }, (res) => {
+        res.resume()
+        resolve(res.statusCode ?? 0)
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    expect(apiWithHost).toBe(403)
     let last = 0
     for (let i = 0; i < 12; i++) {
       last = (
