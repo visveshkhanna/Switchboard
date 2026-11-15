@@ -65,7 +65,7 @@ describe('switchboard CLI', () => {
     )
     expect(await sb('server', 'test', 'alpha')).toContain('6 tools')
     expect(await sb('profile', 'add', 'work', '--servers', 'alpha', '--exclude', 'alpha.fail')).toContain(
-      '/p/work/mcp',
+      'the default profile',
     )
     expect(await sb('profile', 'show', 'work')).toContain('alpha__echo')
     expect(await sb('profile', 'show', 'work')).not.toContain('alpha__fail')
@@ -77,7 +77,7 @@ describe('switchboard CLI', () => {
     await sb('client', 'connect', 'cursor', '--profile', 'work')
     const file = JSON.parse(await readFile(join(root, 'home', '.cursor', 'mcp.json'), 'utf8'))
     expect(file.mcpServers.switchboard.url).toMatch(/\/p\/work\/mcp$/)
-    expect(await sb('client', 'ls')).toMatch(/cursor\s+Cursor.*→ work/)
+    expect(await sb('client', 'ls')).toMatch(/cursor\s+Cursor\s+work.*pinned to work/)
   })
 
   it('serves the profile through the daemon and the stdio bridge', async () => {
@@ -99,6 +99,33 @@ describe('switchboard CLI', () => {
     const result = await client.callTool({ name: 'alpha__add', arguments: { a: 20, b: 22 } })
     expect(result.structuredContent).toEqual({ sum: 42 })
     expect(await sb('status')).toMatch(/cli-test\s+work\s+path/)
+    await client.close()
+  })
+
+  it('sets a client up once and switches its profile live', async () => {
+    await sb('profile', 'add', 'lite', '--servers', 'alpha', '--exclude', 'alpha.echo')
+    expect(await sb('client', 'connect', 'cursor')).toContain('Set up cursor')
+    const file = JSON.parse(await readFile(join(root, 'home', '.cursor', 'mcp.json'), 'utf8'))
+    expect(file.mcpServers.switchboard.url).toMatch(/\/c\/cursor\/mcp$/)
+
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [cli, 'connect', '--client', 'my-agent'],
+      env: env as Record<string, string>,
+      cwd: coreDir,
+    })
+    const client = new Client({ name: 'my-agent', version: '1.0.0' })
+    await client.connect(transport)
+    // "work" was the first profile, so it is the default.
+    expect((await client.listTools()).tools.map((t) => t.name)).toContain('alpha__echo')
+    expect(await sb('client', 'use', 'my-agent', 'lite')).toContain('my-agent now uses lite')
+    for (let i = 0; i < 50; i++) {
+      const names = (await client.listTools()).tools.map((t) => t.name)
+      if (!names.includes('alpha__echo')) break
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    expect((await client.listTools()).tools.map((t) => t.name)).not.toContain('alpha__echo')
+    expect(await sb('client', 'ls')).toMatch(/my-agent\s+my-agent\s+lite/)
     await client.close()
   })
 

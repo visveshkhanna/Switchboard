@@ -1,7 +1,7 @@
-import { brand, type Config } from '@switchboard/shared'
+import { brand, type Config, slugSchema } from '@switchboard/shared'
 import type { Context } from 'hono'
 import type { Logger } from '../logger.ts'
-import { resolveProfile } from '../profiles/resolve.ts'
+import { connectionClientId, resolveProfile } from '../profiles/resolve.ts'
 import type { SessionRegistry } from '../sessions.ts'
 
 interface JsonRpcMessage {
@@ -23,11 +23,21 @@ function rpcError(status: number, message: string, id: JsonRpcMessage['id'] = nu
 export function mcpHandler(deps: { sessions: SessionRegistry; config: () => Config; log: Logger }) {
   return async (c: Context): Promise<Response> => {
     const pathProfile = c.req.param('profile')
+    const pathClient = c.req.param('client')
+    if (pathClient && !slugSchema.safeParse(pathClient).success) {
+      return rpcError(
+        400,
+        `"${pathClient}" is not a valid client id: use lowercase letters, digits, "-" and "_".`,
+      )
+    }
     const sessionId = c.req.header('mcp-session-id')
 
     if (sessionId) {
       const session = deps.sessions.get(sessionId)
       if (!session) return rpcError(404, 'Session not found. Reconnect to start a new session.', null, -32001)
+      if (pathClient && pathClient !== session.clientId) {
+        return rpcError(400, `This session belongs to client "${session.clientId}", not "${pathClient}".`)
+      }
       if (pathProfile && pathProfile !== session.profile) {
         return rpcError(400, `This session belongs to profile "${session.profile}", not "${pathProfile}".`)
       }
@@ -52,6 +62,7 @@ export function mcpHandler(deps: { sessions: SessionRegistry; config: () => Conf
       {
         path: pathProfile,
         header: c.req.header(brand.profileHeader),
+        clientId: pathClient,
         clientName: init.params?.clientInfo?.name,
       },
       deps.config(),
@@ -63,10 +74,23 @@ export function mcpHandler(deps: { sessions: SessionRegistry; config: () => Conf
     }
     // A client nothing assigns a profile to is let in with no tools, and
     // shown in the web UI so the user can pick its profile.
+    const id = connectionClientId({ clientId: pathClient, clientName: clientInfo?.name })
     const session = resolution.ok
-      ? await deps.sessions.create(resolution.profile, resolution.via, clientInfo?.name, clientInfo?.version)
-      : await deps.sessions.create(null, 'unassigned', clientInfo?.name, clientInfo?.version)
-    if (!resolution.ok) deps.log.info(`${clientInfo?.name ?? 'a client'} is waiting for a profile`)
+      ? await deps.sessions.create(
+          resolution.profile,
+          resolution.via,
+          id,
+          clientInfo?.name,
+          clientInfo?.version,
+        )
+      : await deps.sessions.create(
+          null,
+          resolution.reason === 'disabled' ? 'disabled' : 'unassigned',
+          id,
+          clientInfo?.name,
+          clientInfo?.version,
+        )
+    if (!resolution.ok) deps.log.info(`${id ?? 'a client'} has no profile: ${resolution.reason}`)
     return session.transport.handleRequest(c.req.raw, { parsedBody: body })
   }
 }

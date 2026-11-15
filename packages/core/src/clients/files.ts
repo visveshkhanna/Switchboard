@@ -16,8 +16,13 @@ export interface ClientState {
   configExists: boolean
   /** The profile Switchboard's entry points at, if there is one. */
   connectedProfile?: string
-  /** `profile`: a fixed profile; `auto`: the shared endpoint, where client rules decide. */
-  connectedMode?: 'profile' | 'auto'
+  /**
+   * `managed`: the client's own URL, its profile switched in Switchboard;
+   * `profile`: a profile pinned in the URL; `auto`: the shared endpoint.
+   */
+  connectedMode?: 'managed' | 'profile' | 'auto'
+  /** With `managed`, the client id in the URL. */
+  connectedClient?: string
   /** Switchboard's entry exists but does not look like one it wrote. */
   foreignEntry?: boolean
   /** Other MCP servers in the file, which can be imported. */
@@ -69,7 +74,7 @@ function serversOf(
 /** What an entry we wrote points at; undefined if Switchboard did not write it. */
 export function entryTarget(
   entry: Record<string, unknown>,
-): { mode: 'profile'; profile: string } | { mode: 'auto' } | undefined {
+): { mode: 'managed'; client: string } | { mode: 'profile'; profile: string } | { mode: 'auto' } | undefined {
   const url = (entry.url ?? entry.serverUrl ?? entry.httpUrl) as string | undefined
   if (url) {
     let parsed: URL
@@ -79,12 +84,16 @@ export function entryTarget(
       return undefined
     }
     if (!['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname)) return undefined
+    const client = parsed.pathname.match(/^\/c\/([^/]+)\/mcp\/?$/)?.[1]
+    if (client) return { mode: 'managed', client }
     const profile = parsed.pathname.match(/^\/p\/([^/]+)\/mcp\/?$/)?.[1]
     if (profile) return { mode: 'profile', profile }
     return /^\/mcp\/?$/.test(parsed.pathname) ? { mode: 'auto' } : undefined
   }
   const args = entry.args as string[] | undefined
   if (Array.isArray(args) && args.includes(brand.packageName) && args.includes('connect')) {
+    const c = args.indexOf('--client')
+    if (c >= 0 && args[c + 1]) return { mode: 'managed', client: args[c + 1]! }
     const i = args.indexOf('--profile')
     return i >= 0 && args[i + 1] ? { mode: 'profile', profile: args[i + 1]! } : { mode: 'auto' }
   }
@@ -116,6 +125,7 @@ export async function clientState(client: ClientDef, env: ClientEnv): Promise<Cl
       const target = entryTarget(ours)
       state.connectedMode = target?.mode
       if (target?.mode === 'profile') state.connectedProfile = target.profile
+      if (target?.mode === 'managed') state.connectedClient = target.client
       state.foreignEntry = !target
     }
     state.serverCount = Object.keys(servers).filter((n) => n !== ENTRY_NAME).length

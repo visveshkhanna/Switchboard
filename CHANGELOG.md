@@ -4,6 +4,18 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- Per-client profiles. Each client gets its own URL, `/c/<client>/mcp`, written into its config once (`switchboard client connect <id>`); after that its profile is switched in Switchboard (`switchboard client use <id> <profile|none|default>`) and connected sessions move at once, with no config edit or restart. Clients on the shared `/mcp` URL are identified by their MCP name and switched the same way.
+- `config.clients` stores each client's profile; `GET /api/clients` lists known and connected clients together, and `PUT /api/clients/:id/profile` switches one.
+- The first profile created becomes the default profile, and deleting the default makes another profile the default.
+- `switchboard connect --client <id>` for stdio-only clients.
+
+### Changed
+
+- `switchboard client connect <id>` writes the client's own URL instead of requiring `--profile`; `--profile` still pins a profile in the URL.
+- `/api/seen-clients` is replaced by `/api/clients`.
+
 ### Security
 
 - `switchboard server auth` no longer opens the sign-in URL through `cmd` on Windows, where a malicious remote server's authorization URL could run a command, and only http(s) URLs are opened, in the CLI and the web UI.

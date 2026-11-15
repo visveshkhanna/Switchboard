@@ -94,6 +94,17 @@ export const clientRuleSchema = z.object({
 })
 export type ClientRule = z.infer<typeof clientRuleSchema>
 
+/**
+ * A client's profile. `profile` set: that profile. `null`: no profile (the
+ * client gets no tools). Absent: the default profile.
+ */
+export const clientSchema = z.object({
+  /** Display name, e.g. the MCP clientInfo.name it connected with. */
+  name: z.string().max(200).optional(),
+  profile: slugSchema.nullable().optional(),
+})
+export type ClientConfig = z.infer<typeof clientSchema>
+
 export const settingsSchema = z.object({
   /** Keep tool-call activity in audit.jsonl. Unset until the user has been asked. */
   activityLog: z.boolean().optional(),
@@ -107,7 +118,9 @@ export const configSchema = z.object({
   version: z.literal(1).default(1),
   servers: z.record(slugSchema, serverConfigSchema).default({}),
   profiles: z.record(slugSchema, profileSchema).default({}),
-  /** Checked in order; the first match wins. */
+  /** Each client's profile, keyed by client id (the /c/<id>/mcp path, or the slug of its MCP name). */
+  clients: z.record(slugSchema, clientSchema).default({}),
+  /** Glob rules on the MCP client name, for clients without their own entry. The first match wins. */
   clientRules: z.array(clientRuleSchema).default([]),
   /** Used when nothing else picks a profile. Unset means such connections are refused. */
   defaultProfile: slugSchema.optional(),
@@ -123,6 +136,10 @@ export function parseConfig(input: unknown): Config {
     for (const server of profile.servers) {
       if (!config.servers[server]) problems.push(`profile "${name}" lists unknown server "${server}"`)
     }
+  }
+  for (const [id, client] of Object.entries(config.clients)) {
+    if (client.profile && !config.profiles[client.profile])
+      problems.push(`client "${id}" uses unknown profile "${client.profile}"`)
   }
   for (const rule of config.clientRules) {
     if (!config.profiles[rule.profile])

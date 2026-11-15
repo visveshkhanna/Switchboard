@@ -1,11 +1,23 @@
 import { EventEmitter } from 'node:events'
+import { clientId } from '@switchboard/shared'
 import { readJson, writeJson } from './fs.ts'
 
-export type ResolvedVia = 'path' | 'header' | 'client-rule' | 'default' | 'unassigned'
+export type ResolvedVia =
+  | 'path'
+  | 'header'
+  | 'client'
+  | 'client-rule'
+  | 'default'
+  /** No profile matched: the client waits with no tools. */
+  | 'unassigned'
+  /** Every profile is switched off for this client. */
+  | 'disabled'
 
 export interface SeenClient {
-  /** The MCP `clientInfo.name`. */
-  name: string
+  /** The client id: the /c/<id>/mcp path, or the slug of its MCP name. */
+  id: string
+  /** The MCP `clientInfo.name` it last connected with. */
+  name?: string
   version?: string
   firstSeen: string
   lastSeen: string
@@ -20,9 +32,9 @@ export interface SeenClientsEvents {
 const MAX_CLIENTS = 200
 
 /**
- * Every MCP client that has connected, by name, kept in seen-clients.json.
- * It lets the web UI show clients Switchboard has no preset for, and assign
- * them a profile.
+ * Every client that has connected, by id, kept in seen-clients.json, so the
+ * web UI can list clients Switchboard has no preset for and switch their
+ * profile.
  */
 export class SeenClients extends EventEmitter<SeenClientsEvents> {
   #clients = new Map<string, SeenClient>()
@@ -35,8 +47,12 @@ export class SeenClients extends EventEmitter<SeenClientsEvents> {
   static async open(path?: string): Promise<SeenClients> {
     const store = new SeenClients(path)
     if (path) {
-      const saved = await readJson<SeenClient[]>(path).catch(() => undefined)
-      for (const client of saved ?? []) store.#clients.set(client.name, client)
+      const saved = await readJson<(SeenClient & { id?: string })[]>(path).catch(() => undefined)
+      for (const client of saved ?? []) {
+        // Files from 0.2 keyed clients by name only.
+        const id = client.id ?? clientId(client.name ?? '')
+        store.#clients.set(id, { ...client, id })
+      }
     }
     return store
   }
@@ -45,15 +61,22 @@ export class SeenClients extends EventEmitter<SeenClientsEvents> {
     return [...this.#clients.values()].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen))
   }
 
-  get(name: string): SeenClient | undefined {
-    return this.#clients.get(name)
+  get(id: string): SeenClient | undefined {
+    return this.#clients.get(id)
   }
 
-  record(name: string, version: string | undefined, via: ResolvedVia, profile: string | null): void {
+  record(
+    id: string,
+    name: string | undefined,
+    version: string | undefined,
+    via: ResolvedVia,
+    profile: string | null,
+  ): void {
     const now = new Date().toISOString()
-    const existing = this.#clients.get(name)
-    this.#clients.set(name, {
-      name,
+    const existing = this.#clients.get(id)
+    this.#clients.set(id, {
+      id,
+      name: name ?? existing?.name,
       version: version ?? existing?.version,
       firstSeen: existing?.firstSeen ?? now,
       lastSeen: now,
@@ -62,13 +85,13 @@ export class SeenClients extends EventEmitter<SeenClientsEvents> {
     })
     if (this.#clients.size > MAX_CLIENTS) {
       const oldest = this.list().at(-1)
-      if (oldest) this.#clients.delete(oldest.name)
+      if (oldest) this.#clients.delete(oldest.id)
     }
     this.#changed()
   }
 
-  forget(name: string): boolean {
-    const removed = this.#clients.delete(name)
+  forget(id: string): boolean {
+    const removed = this.#clients.delete(id)
     if (removed) this.#changed()
     return removed
   }

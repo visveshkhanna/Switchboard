@@ -69,7 +69,10 @@ describe('admin API', () => {
     const file = JSON.parse(await readFile(join(clientHome, '.cursor', 'mcp.json'), 'utf8'))
     expect(file.mcpServers.switchboard.url).toMatch(/\/p\/work\/mcp$/)
     const clients = await api('/clients')
-    expect(clients.body.find((c: any) => c.id === 'cursor').connectedProfile).toBe('work')
+    expect(clients.body.find((c: any) => c.id === 'cursor').preset).toMatchObject({
+      setup: 'profile',
+      pinnedProfile: 'work',
+    })
   })
 
   it('stores secrets without ever returning their values', async () => {

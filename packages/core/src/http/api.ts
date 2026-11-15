@@ -178,6 +178,8 @@ export function adminApi(daemon: Daemon): Hono {
       const profile = profileSchema.parse(await c.req.json())
       await update((draft) => {
         draft.profiles[name] = profile
+        // New clients use the default profile, so there should always be one.
+        draft.defaultProfile ??= name
         return draft
       })
       return c.json({ name, profile })
@@ -191,7 +193,8 @@ export function adminApi(daemon: Daemon): Hono {
       await update((draft) => {
         delete draft.profiles[name]
         draft.clientRules = draft.clientRules.filter((r) => r.profile !== name)
-        if (draft.defaultProfile === name) draft.defaultProfile = undefined
+        for (const client of Object.values(draft.clients)) if (client.profile === name) delete client.profile
+        if (draft.defaultProfile === name) draft.defaultProfile = Object.keys(draft.profiles)[0]
         return draft
       })
       return c.json({ ok: true })
@@ -276,41 +279,6 @@ export function adminApi(daemon: Daemon): Hono {
     return c.json(computeStats(events, range, source))
   })
 
-  // Every MCP client that has connected, including ones without a preset.
-  const seenClients = () => {
-    const counts = daemon.sessions.countsByClient()
-    const cfg = config()
-    return daemon.seen.list().map((client) => {
-      const rule = cfg.clientRules.find((r) => r.client === client.name)
-      const matched = resolveProfile({ clientName: client.name }, cfg)
-      return {
-        ...client,
-        ruleProfile: rule?.profile ?? null,
-        matchedProfile: matched.ok ? matched.profile : null,
-        sessions: counts.get(client.name)?.sessions ?? 0,
-        waiting: counts.get(client.name)?.waiting ?? 0,
-      }
-    })
-  }
-  api.get('/seen-clients', (c) => c.json(seenClients()))
-  /** Give a client a profile with an exact-name rule that wins over the others; null removes it. */
-  api.put('/seen-clients/:name/profile', async (c) => {
-    try {
-      const name = c.req.param('name')
-      const { profile } = z.object({ profile: slugSchema.nullable() }).parse(await c.req.json())
-      if (profile && !config().profiles[profile])
-        return c.json({ error: `Unknown profile "${profile}"` }, 404)
-      await update((d) => {
-        const others = d.clientRules.filter((r) => r.client !== name)
-        return { ...d, clientRules: profile ? [{ client: name, profile }, ...others] : others }
-      })
-      return c.json(seenClients().find((s) => s.name === name) ?? null)
-    } catch (error) {
-      return problem(c, error)
-    }
-  })
-  api.delete('/seen-clients/:name', (c) => c.json({ ok: daemon.seen.forget(c.req.param('name')) }))
-
   // Sessions and activity
   api.get('/sessions', (c) => c.json(daemon.sessions.list()))
   api.get('/audit', (c) => c.json(daemon.audit.recent(Number(c.req.query('limit') ?? 200))))
@@ -321,7 +289,7 @@ export function adminApi(daemon: Daemon): Hono {
       const onStatus = (s: unknown) => void send('server', s)
       const onSessions = () => void send('sessions', daemon.sessions.list())
       const onConfig = () => void send('config', daemon.config.config)
-      const onSeen = () => void send('clients', seenClients())
+      const onSeen = () => void send('clients', null)
       daemon.seen.on('change', onSeen)
       daemon.audit.on('event', onAudit)
       daemon.upstream.on('status', onStatus)
@@ -362,22 +330,118 @@ export function adminApi(daemon: Daemon): Hono {
     return c.json({ ok: true })
   })
 
-  // AI clients
-  const endpoint = (profile: string | null) =>
-    `http://127.0.0.1:${daemon.info?.port ?? brand.defaultPort}${profile ? `/p/${profile}` : ''}/mcp`
-  api.get('/clients', async (c) => c.json(await listClients(daemon.clientEnv)))
+  // Clients: the ones Switchboard can configure, plus every client that has connected.
+  const base = () => `http://127.0.0.1:${daemon.info?.port ?? brand.defaultPort}`
+  const clientsView = async () => {
+    const cfg = config()
+    const presets = await listClients(daemon.clientEnv)
+    const counts = daemon.sessions.countsByClient()
+    const seen = new Map(daemon.seen.list().map((s) => [s.id, s]))
+    const ids = new Set([...presets.map((p) => p.id), ...seen.keys(), ...Object.keys(cfg.clients)])
+    const rows = [...ids].map((id) => {
+      const preset = presets.find((p) => p.id === id)
+      const last = seen.get(id)
+      const own = cfg.clients[id]
+      const resolved = resolveProfile({ clientId: id, clientName: last?.name }, cfg)
+      const count = counts.get(id)
+      return {
+        id,
+        name: preset?.name ?? own?.name ?? last?.name ?? id,
+        clientInfoName: last?.name ?? null,
+        version: last?.version ?? null,
+        firstSeen: last?.firstSeen ?? null,
+        lastSeen: last?.lastSeen ?? null,
+        /** What the user chose: a profile, every profile off, or the default profile. */
+        selection: own?.profile === undefined ? 'default' : own.profile === null ? 'off' : 'profile',
+        profile: own?.profile ?? null,
+        /** What the client gets now, from its choice, a client rule or the default. */
+        effectiveProfile: resolved.ok ? resolved.profile : null,
+        via: resolved.ok ? resolved.via : resolved.reason === 'disabled' ? 'disabled' : 'unassigned',
+        sessions: count?.sessions ?? 0,
+        waiting: count?.waiting ?? 0,
+        url: `${base()}/c/${id}/mcp`,
+        preset: preset
+          ? {
+              installed: preset.installed,
+              configPath: preset.configPath,
+              configExists: preset.configExists,
+              docs: preset.docs,
+              error: preset.error ?? null,
+              /** How the client's config file reaches Switchboard. */
+              setup: preset.connectedMode ?? (preset.foreignEntry ? 'foreign' : 'none'),
+              pinnedProfile: preset.connectedProfile ?? null,
+              managedId: preset.connectedClient ?? null,
+              otherServers: preset.serverCount,
+            }
+          : null,
+      }
+    })
+    const rank = (r: (typeof rows)[number]) =>
+      r.sessions
+        ? 0
+        : r.lastSeen
+          ? 1
+          : r.preset?.installed
+            ? 2
+            : r.preset?.setup && r.preset.setup !== 'none'
+              ? 2
+              : 3
+    return rows.sort(
+      (a, b) =>
+        rank(a) - rank(b) ||
+        (b.lastSeen ?? '').localeCompare(a.lastSeen ?? '') ||
+        a.name.localeCompare(b.name),
+    )
+  }
+  api.get('/clients', async (c) => c.json(await clientsView()))
+
+  /** Switch a client's profile: a profile, null for none, or { useDefault: true }. Open sessions move at once. */
+  api.put('/clients/:id/profile', async (c) => {
+    try {
+      const id = slugSchema.parse(c.req.param('id'))
+      const body = z
+        .union([z.object({ profile: slugSchema.nullable() }), z.object({ useDefault: z.literal(true) })])
+        .parse(await c.req.json())
+      if ('profile' in body && body.profile && !config().profiles[body.profile]) {
+        return c.json({ error: `Unknown profile "${body.profile}"` }, 404)
+      }
+      const name = daemon.seen.get(id)?.name
+      await update((d) => {
+        const current = d.clients[id] ?? {}
+        if ('useDefault' in body) {
+          const { profile: _drop, ...rest } = current
+          d.clients[id] = rest
+        } else {
+          d.clients[id] = { ...current, ...(name && !current.name ? { name } : {}), profile: body.profile }
+        }
+        return d
+      })
+      return c.json((await clientsView()).find((r) => r.id === id) ?? null)
+    } catch (error) {
+      return problem(c, error)
+    }
+  })
+
+  /**
+   * Write Switchboard into a client's config file. By default the entry is the
+   * client's own URL, so its profile can be switched later without touching
+   * the file again; `{ profile }` pins a profile in the URL instead, and
+   * `{ profile: null }` uses the shared /mcp URL.
+   */
   api.post('/clients/:id/connect', async (c) => {
     try {
-      // profile null connects to the shared /mcp endpoint, where client rules decide.
-      const { profile } = z.object({ profile: slugSchema.nullable() }).parse(await c.req.json())
-      if (profile && !config().profiles[profile])
-        return c.json({ error: `Unknown profile "${profile}"` }, 404)
-      const result = await connectClient(
-        c.req.param('id'),
-        { url: endpoint(profile), profile },
-        daemon.clientEnv,
-        daemon.paths.backups,
-      )
+      const id = slugSchema.parse(c.req.param('id'))
+      const body = z
+        .object({ profile: slugSchema.nullable().optional() })
+        .parse(await c.req.json().catch(() => ({})))
+      if (body.profile && !config().profiles[body.profile]) {
+        return c.json({ error: `Unknown profile "${body.profile}"` }, 404)
+      }
+      const target =
+        body.profile === undefined
+          ? { url: `${base()}/c/${id}/mcp`, profile: null, client: id }
+          : { url: `${base()}${body.profile ? `/p/${body.profile}` : ''}/mcp`, profile: body.profile }
+      const result = await connectClient(id, target, daemon.clientEnv, daemon.paths.backups)
       return c.json({ ok: true, ...result })
     } catch (error) {
       return problem(c, error, 409)
@@ -392,6 +456,18 @@ export function adminApi(daemon: Daemon): Hono {
     } catch (error) {
       return problem(c, error, 409)
     }
+  })
+  /** Forget a client: its history and its profile choice. Config files are not touched. */
+  api.delete('/clients/:id', async (c) => {
+    const id = c.req.param('id')
+    daemon.seen.forget(id)
+    if (config().clients[id]) {
+      await update((d) => {
+        delete d.clients[id]
+        return d
+      })
+    }
+    return c.json({ ok: true })
   })
 
   // Import servers from client configs

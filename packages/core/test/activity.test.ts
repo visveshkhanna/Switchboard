@@ -89,6 +89,6 @@ describe('automatic client connection', () => {
     const file = JSON.parse(await readFile(join(clientHome, '.cursor', 'mcp.json'), 'utf8'))
     expect(file.mcpServers.switchboard.url).toMatch(/127\.0\.0\.1:\d+\/mcp$/)
     const cursor = (await api('/clients')).body.find((c: any) => c.id === 'cursor')
-    expect(cursor).toMatchObject({ connectedMode: 'auto', foreignEntry: false })
+    expect(cursor.preset).toMatchObject({ setup: 'auto' })
   })
 })

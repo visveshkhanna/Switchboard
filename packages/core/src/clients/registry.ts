@@ -17,8 +17,10 @@ export interface ClientEnv {
 export interface ConnectTarget {
   /** Streamable HTTP endpoint for the profile, e.g. http://127.0.0.1:7690/p/work/mcp */
   url: string
-  /** null: the shared /mcp endpoint, where client rules and the default profile decide. */
+  /** A profile pinned in the URL (/p/<profile>/mcp), or null. */
   profile: string | null
+  /** The client's own URL (/c/<id>/mcp): its profile is switched in Switchboard. */
+  client?: string
 }
 
 export interface ClientDef {
@@ -47,9 +49,10 @@ function appSupport(env: ClientEnv, ...parts: string[]): string {
 }
 
 /** The stdio bridge, for clients that cannot connect to HTTP servers. */
-export function bridgeEntry(profile: string | null): Record<string, unknown> {
+export function bridgeEntry(target: Pick<ConnectTarget, 'profile' | 'client'>): Record<string, unknown> {
   const args = ['-y', brand.packageName, 'connect']
-  if (profile) args.push('--profile', profile)
+  if (target.client) args.push('--client', target.client)
+  else if (target.profile) args.push('--profile', target.profile)
   return { command: 'npx', args }
 }
 
@@ -82,7 +85,7 @@ export const CLIENTS: ClientDef[] = [
     detect: (env) => [appSupport(env, 'Claude')],
     key: ['mcpServers'],
     // Claude Desktop's config file only runs local commands.
-    entry: ({ profile }) => bridgeEntry(profile),
+    entry: (target) => bridgeEntry(target),
     docs: 'https://modelcontextprotocol.io/quickstart/user',
   },
   {

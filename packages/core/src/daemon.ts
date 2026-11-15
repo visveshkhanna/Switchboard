@@ -112,11 +112,10 @@ export class Daemon {
       seen,
       log: log.child('mcp'),
       version,
-      resolve: (clientName) => {
-        const r = resolveProfile({ clientName }, config.config)
-        return r.ok && (r.via === 'client-rule' || r.via === 'default')
-          ? { profile: r.profile, via: r.via }
-          : undefined
+      resolve: (clientId, clientName) => {
+        const r = resolveProfile({ clientId, clientName }, config.config)
+        if (r.ok) return { profile: r.profile, via: r.via }
+        return { profile: null, via: r.reason === 'disabled' ? 'disabled' : 'unassigned' }
       },
       adminUrl: () => `http://127.0.0.1:${port ?? brand.defaultPort}`,
     })
@@ -201,6 +200,7 @@ export class Daemon {
     this.options.extend?.(app, this)
     const handler = mcpHandler({ sessions: this.sessions, config: () => this.config.config, log: this.log })
     app.all('/p/:profile/mcp', handler)
+    app.all('/c/:client/mcp', handler)
     app.all('/mcp', handler)
     if (this.options.webRoot) app.route('/', webUi(this.options.webRoot, this.adminToken))
   }

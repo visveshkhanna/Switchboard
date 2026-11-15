@@ -28,9 +28,10 @@ ${bold('Usage')}
   ${n} profile ls | show NAME | rm NAME
   ${n} default PROFILE|none                   Profile for clients nothing else matches
 
-  ${n} client ls                              AI clients and their connections
-  ${n} client connect ID --profile NAME       Point a client at a profile
-  ${n} client connect ID --auto               ...or at the shared endpoint (rules decide)
+  ${n} client ls                              Clients and the profile each one uses
+  ${n} client connect ID                      Set a client up once (writes its config file)
+  ${n} client use ID PROFILE|none|default     Switch a client's profile, live
+  ${n} client connect ID --profile NAME       Advanced: pin a profile in the URL instead
   ${n} client disconnect ID
   ${n} rule add "CLIENT-GLOB" PROFILE         Pick a profile by MCP client name
   ${n} rule ls | rm "CLIENT-GLOB"
@@ -38,7 +39,7 @@ ${bold('Usage')}
   ${n} secret set NAME [VALUE]                Store a secret (prompts if no value)
   ${n} secret ls | rm NAME
 
-  ${n} connect [--profile NAME]               stdio bridge for stdio-only clients
+  ${n} connect [--client ID|--profile NAME]   stdio bridge for stdio-only clients
 
   ${n} activity [on|off]                      Keep a log of tool calls for activity charts
 
@@ -76,7 +77,7 @@ const options = {
   auto: { type: 'boolean' },
 } as const
 
-async function connect(profile: string | undefined, url: string | undefined) {
+async function connect(profile: string | undefined, url: string | undefined, client?: string) {
   let target = url
   if (!target) {
     let daemon = await runningDaemon()
@@ -87,7 +88,11 @@ async function connect(profile: string | undefined, url: string | undefined) {
       if (!daemon) throw new Error(`${brand.displayName} did not start; run \`${n} up\` to see why.`)
     }
     // Without a profile, the shared endpoint lets client rules and the default profile decide.
-    target = profile ? `${daemon.url}/p/${profile}/mcp` : `${daemon.url}/mcp`
+    target = client
+      ? `${daemon.url}/c/${client}/mcp`
+      : profile
+        ? `${daemon.url}/p/${profile}/mcp`
+        : `${daemon.url}/mcp`
   }
   await runBridge(target)
 }
@@ -124,7 +129,7 @@ async function main(argv: string[]) {
     case 'import':
       return cfg.importServers({ client: o.client, yes: o.yes })
     case 'connect':
-      return connect(o.profile ?? sub, o.url)
+      return connect(o.profile ?? sub, o.url, o.client)
     case 'default':
       return cfg.setDefault(sub)
     case 'activity':
@@ -175,6 +180,8 @@ async function main(argv: string[]) {
           return cfg.clientList()
         case 'connect':
           return cfg.clientConnect(a1, { profile: o.profile, port: o.port, auto: o.auto })
+        case 'use':
+          return cfg.clientUse(a1, a2)
         case 'disconnect':
           return cfg.clientDisconnect(a1)
       }

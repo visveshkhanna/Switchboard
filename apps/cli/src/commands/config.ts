@@ -9,6 +9,7 @@ import {
   importCandidates,
   listClients,
   openSecretBackend,
+  resolveProfile,
   SeenClients,
   silentLogger,
   UpstreamConnection,
@@ -218,13 +219,21 @@ export async function profileAdd(
     ...(opts.exclude ? { exclude: list(opts.exclude) } : {}),
     ...(surface ? { surface } : {}),
   })
+  let madeDefault = false
   await store.update((c) => {
     c.profiles[profile] = next
+    if (!c.defaultProfile) {
+      c.defaultProfile = profile
+      madeDefault = true
+    }
     return c
   })
-  console.log(`${current ? 'Updated' : 'Added'} profile ${bold(profile)}.`)
-  console.log(`Endpoint: ${cyan(`http://127.0.0.1:${defaultPort()}/p/${profile}/mcp`)}`)
-  if (!current) console.log(dim(`Connect a client: ${brand.name} client connect cursor --profile ${profile}`))
+  console.log(
+    `${current ? 'Updated' : 'Added'} profile ${bold(profile)}${madeDefault ? ' (the default profile)' : ''}.`,
+  )
+  if (!current) {
+    console.log(dim(`Use it for a client: ${brand.name} client use cursor ${profile}`))
+  }
 }
 
 export async function profileList() {
@@ -272,7 +281,8 @@ export async function profileRemove(name: string | undefined) {
   await store.update((c) => {
     delete c.profiles[profile]
     c.clientRules = c.clientRules.filter((r) => r.profile !== profile)
-    if (c.defaultProfile === profile) c.defaultProfile = undefined
+    for (const client of Object.values(c.clients)) if (client.profile === profile) delete client.profile
+    if (c.defaultProfile === profile) c.defaultProfile = Object.keys(c.profiles)[0]
     return c
   })
   console.log(`Removed profile ${bold(profile)}.`)
@@ -439,77 +449,116 @@ export async function importServers(opts: { client?: string; yes?: boolean }) {
 
 // ── AI clients ─────────────────────────────────────────────────────────────
 
+/** Every client: the ones Switchboard can configure and the ones that have connected. */
 export async function clientList() {
   const store = await openConfig()
-  const states = await listClients(defaultClientEnv())
-  console.log(
-    table(
-      states.map((c) => [
-        c.id,
-        c.name,
-        c.installed ? '' : dim('not found'),
-        c.error
-          ? red(c.error)
-          : c.connectedMode === 'auto'
-            ? green('→ automatic')
-            : c.connectedProfile
-              ? green(`→ ${c.connectedProfile}`)
-              : c.foreignEntry
-                ? yellow('foreign entry')
-                : '',
-        String(c.serverCount || ''),
-      ]),
-      ['ID', 'CLIENT', 'INSTALLED', 'SWITCHBOARD', 'OTHER SERVERS'],
-    ),
-  )
+  const cfg = store.config
+  const presets = await listClients(defaultClientEnv())
   const seen = (await SeenClients.open(paths().seenClients)).list()
-  if (seen.length) {
-    console.log(`\n${bold('Clients that have connected')}`)
-    console.log(
-      table(
-        seen.map((c) => [
-          c.name,
-          c.version ?? '',
-          c.lastProfile ?? yellow('waiting'),
-          c.lastVia,
-          c.lastSeen.slice(0, 16).replace('T', ' '),
-        ]),
-        ['NAME', 'VERSION', 'PROFILE', 'VIA', 'LAST SEEN'],
-      ),
-    )
-    if (seen.some((c) => !c.lastProfile)) {
-      console.log(dim(`\nGive a waiting client a profile: ${brand.name} rule add "<name>" <profile>`))
-    }
-  }
-  if (!Object.keys(store.config.profiles).length)
+  const ids = [
+    ...new Set([...presets.map((p) => p.id), ...seen.map((s) => s.id), ...Object.keys(cfg.clients)]),
+  ]
+  const rows = ids.map((id) => {
+    const preset = presets.find((p) => p.id === id)
+    const last = seen.find((s) => s.id === id)
+    const own = cfg.clients[id]
+    const r = resolveProfile({ clientId: id, clientName: last?.name }, cfg)
+    const profile = r.ok
+      ? `${r.profile}${r.via === 'default' ? dim(' (default)') : r.via === 'client-rule' ? dim(' (rule)') : ''}`
+      : r.reason === 'disabled'
+        ? yellow('off')
+        : yellow('none')
+    const setup = !preset
+      ? dim('connected itself')
+      : preset.error
+        ? red(preset.error)
+        : preset.connectedMode === 'managed'
+          ? green('set up')
+          : preset.connectedMode === 'profile'
+            ? `pinned to ${preset.connectedProfile}`
+            : preset.connectedMode === 'auto'
+              ? 'shared URL'
+              : preset.foreignEntry
+                ? yellow('foreign entry')
+                : preset.installed
+                  ? dim('not set up')
+                  : dim('not installed')
+    return [
+      id,
+      preset?.name ?? own?.name ?? last?.name ?? id,
+      profile,
+      setup,
+      last ? last.lastSeen.slice(0, 16).replace('T', ' ') : '',
+    ]
+  })
+  console.log(table(rows, ['ID', 'CLIENT', 'PROFILE', 'SETUP', 'LAST SEEN']))
+  if (!Object.keys(cfg.profiles).length) {
     console.log(dim(`\nCreate a profile first: ${brand.name} profile add <name>`))
+  } else {
+    console.log(dim(`\nSet a client up once: ${brand.name} client connect <id>`))
+    console.log(dim(`Switch its profile any time: ${brand.name} client use <id> <profile|none|default>`))
+  }
 }
 
+/** Switch a client's profile. Connected clients move to it at once. */
+export async function clientUse(id: string | undefined, choice: string | undefined) {
+  const client = slug(id, 'client')
+  if (!choice) throw new UsageError('Give a profile, "none" (no tools) or "default".')
+  const store = await openConfig()
+  if (choice !== 'none' && choice !== 'default' && !store.config.profiles[slug(choice, 'profile')]) {
+    throw new UsageError(`No profile named "${choice}".`)
+  }
+  await store.update((c) => {
+    const current = c.clients[client] ?? {}
+    if (choice === 'default') {
+      const { profile: _drop, ...rest } = current
+      c.clients[client] = rest
+    } else {
+      c.clients[client] = { ...current, profile: choice === 'none' ? null : choice }
+    }
+    return c
+  })
+  const message =
+    choice === 'default'
+      ? `${bold(client)} now uses the default profile${store.config.defaultProfile ? ` (${store.config.defaultProfile})` : ''}.`
+      : choice === 'none'
+        ? `${bold(client)} now has every profile switched off.`
+        : `${bold(client)} now uses ${bold(choice)}.`
+  console.log(`${message} ${dim('Connected sessions switch at once.')}`)
+}
+
+/**
+ * Write Switchboard into a client's config file: by default its own URL,
+ * so its profile can be switched later without touching the file again.
+ */
 export async function clientConnect(
   id: string | undefined,
   opts: { profile?: string; port?: string; auto?: boolean },
 ) {
   if (!id) throw new UsageError(`Give a client: ${CLIENTS.map((c) => c.id).join(', ')}.`)
-  if (!opts.auto && !opts.profile)
-    throw new UsageError('Give --profile NAME, or --auto to let client rules decide.')
-  const profile = opts.auto ? null : slug(opts.profile, 'profile')
   const store = await openConfig()
-  if (profile && !store.config.profiles[profile]) throw new UsageError(`No profile named "${profile}".`)
+  const pinned = opts.profile ? slug(opts.profile, 'profile') : undefined
+  if (pinned && !store.config.profiles[pinned]) throw new UsageError(`No profile named "${pinned}".`)
   const daemon = await runningDaemon()
   const port = opts.port ? Number(opts.port) : (daemon?.port ?? defaultPort())
-  const { path, backup } = await connectClient(
-    id,
-    { url: `http://127.0.0.1:${port}${profile ? `/p/${profile}` : ''}/mcp`, profile },
-    defaultClientEnv(),
-    paths().backups,
-  )
-  console.log(
-    profile
-      ? `Connected ${bold(id)} to profile ${bold(profile)} in ${path}.`
-      : `Connected ${bold(id)} to the shared endpoint in ${path}; client rules and the default profile pick its profile.`,
-  )
+  const base = `http://127.0.0.1:${port}`
+  const target = pinned
+    ? { url: `${base}/p/${pinned}/mcp`, profile: pinned }
+    : opts.auto
+      ? { url: `${base}/mcp`, profile: null }
+      : { url: `${base}/c/${id}/mcp`, profile: null, client: id }
+  const { path, backup } = await connectClient(id, target, defaultClientEnv(), paths().backups)
+  if (pinned) console.log(`Connected ${bold(id)} to profile ${bold(pinned)} in ${path}.`)
+  else if (opts.auto) console.log(`Connected ${bold(id)} to the shared endpoint in ${path}.`)
+  else {
+    const r = resolveProfile({ clientId: id }, store.config)
+    console.log(`Set up ${bold(id)} in ${path}. It uses ${bold(r.ok ? r.profile : 'no profile yet')}.`)
+    console.log(
+      dim(`Switch its profile any time, without restarting it: ${brand.name} client use ${id} <profile>`),
+    )
+  }
   if (backup) console.log(dim(`Backup: ${backup}`))
-  console.log(dim('Restart or reload the client to pick it up.'))
+  console.log(dim('Restart or reload the client once to pick it up.'))
 }
 
 export async function clientDisconnect(id: string | undefined) {
