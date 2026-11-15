@@ -2,7 +2,7 @@ import { brand } from '@switchboard/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ActivityIcon, ChartNoAxesColumnIcon, InfoIcon } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
 import { ErrorAlert, InlineCode, LoadingState, Page, SimpleSelect } from '@/components/common'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -300,13 +300,10 @@ function Charts({ stats, range, refreshing }: { stats: Stats; range: StatsRange;
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <ChartCard title="Calls over time" description="Succeeded and failed calls per interval.">
               <ChartContainer config={callsConfig} className="aspect-auto h-64 w-full">
-                <AreaChart data={buckets} margin={{ left: 0, right: 8, top: 8 }}>
+                <BarChart data={buckets} margin={{ left: 0, right: 8, top: 8 }} barCategoryGap={1}>
                   <CartesianGrid vertical={false} />
                   <XAxis
                     dataKey="t"
-                    type="number"
-                    scale="time"
-                    domain={['dataMin', 'dataMax']}
                     tickFormatter={fmtTick}
                     tickLine={false}
                     axisLine={false}
@@ -314,30 +311,20 @@ function Charts({ stats, range, refreshing }: { stats: Stats; range: StatsRange;
                   />
                   <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={36} />
                   <ChartTooltip
-                    content={<ChartTooltipContent indicator="line" labelFormatter={fmtLabel} />}
+                    cursor={{ fill: 'var(--color-muted)' }}
+                    content={<ChartTooltipContent labelFormatter={fmtLabel} />}
                   />
-                  <Area
-                    isAnimationActive={false}
-                    dataKey="ok"
-                    stackId="calls"
-                    type="monotone"
-                    stroke="var(--color-ok)"
-                    strokeWidth={2}
-                    fill="var(--color-ok)"
-                    fillOpacity={0.12}
-                  />
-                  <Area
+                  {/* Failed calls sit on top of succeeded ones, so each bar's height is all calls. */}
+                  <Bar isAnimationActive={false} dataKey="ok" stackId="calls" fill="var(--color-ok)" />
+                  <Bar
                     isAnimationActive={false}
                     dataKey="errors"
                     stackId="calls"
-                    type="monotone"
-                    stroke="var(--color-errors)"
-                    strokeWidth={2}
                     fill="var(--color-errors)"
-                    fillOpacity={0.2}
+                    radius={[2, 2, 0, 0]}
                   />
                   <ChartLegend content={<ChartLegendContent />} />
-                </AreaChart>
+                </BarChart>
               </ChartContainer>
             </ChartCard>
 
