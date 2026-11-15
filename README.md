@@ -17,7 +17,7 @@ Group your MCP servers into profiles (personal, work, a client's) and give Curso
 
 </div>
 
-<a href="https://github.com/visveshkhanna/Switchboard/blob/main/.github/assets/switchboard-demo.mp4">
+<a href="https://switchboard.visvesh.dev/#demo">
   <img alt="Watch the 45-second demo: flip a switch and a client's tools change live" src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/demo-poster.jpg">
 </a>
 

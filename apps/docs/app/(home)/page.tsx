@@ -43,49 +43,6 @@ const features: { icon: ReactNode; title: string; body: string; href: string }[]
   },
 ];
 
-function Diagram() {
-  const clients = ['Cursor', 'Claude Code', 'VS Code'];
-  const profiles = [
-    { name: 'work', servers: 'github · linear · sentry' },
-    { name: 'personal', servers: 'github · notion · fs' },
-    { name: 'acme', servers: 'jira · postgres' },
-  ];
-  return (
-    <div className="w-full min-w-0 max-w-3xl overflow-hidden rounded-xl border bg-fd-card text-left shadow-lg">
-      <div className="flex items-center gap-1.5 border-b px-4 py-3">
-        <span className="size-3 rounded-full bg-fd-border" />
-        <span className="size-3 rounded-full bg-fd-border" />
-        <span className="size-3 rounded-full bg-fd-border" />
-        <span className="ml-3 font-mono text-xs text-fd-muted-foreground">localhost:7690</span>
-      </div>
-      <div className="grid grid-cols-[1fr_auto_1.4fr] items-center gap-3 p-5 font-mono text-[13px] sm:gap-6">
-        <div className="flex flex-col gap-2">
-          {clients.map((c) => (
-            <div key={c} className="truncate rounded-md border bg-fd-background px-3 py-2">
-              {c}
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-col gap-2 text-fd-muted-foreground">
-          {profiles.map((p) => (
-            <div key={p.name} className="py-2">
-              →
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-col gap-2">
-          {profiles.map((p) => (
-            <div key={p.name} className="min-w-0 rounded-md border bg-fd-background px-3 py-2">
-              <span className="text-fd-foreground">/p/{p.name}/mcp</span>
-              <span className="hidden text-fd-muted-foreground sm:inline"> {p.servers}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function HomePage() {
   return (
     <main className="flex flex-1 flex-col overflow-x-clip">
@@ -119,7 +76,21 @@ export default function HomePage() {
             GitHub
           </a>
         </div>
-        <Diagram />
+        <figure id="demo" className="w-full max-w-4xl scroll-mt-24">
+          <video
+            src="/demo/switchboard.mp4"
+            poster="/demo/poster.jpg"
+            controls
+            playsInline
+            preload="metadata"
+            className="w-full rounded-xl border bg-black shadow-lg"
+          >
+            <a href="/demo/switchboard.mp4">Watch the demo</a>
+          </video>
+          <figcaption className="mt-3 text-sm text-fd-muted-foreground">
+            Flip a switch and a client&apos;s tools change live. 45 seconds.
+          </figcaption>
+        </figure>
       </section>
 
       <section className="mx-4 grid max-w-5xl gap-px overflow-hidden rounded-xl border bg-fd-border sm:grid-cols-2 lg:mx-auto lg:w-full lg:grid-cols-3">
@@ -135,8 +106,8 @@ export default function HomePage() {
       <section className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 px-4 py-20 text-center">
         <h2 className="text-2xl font-semibold tracking-tight">Replace a dozen server entries with one</h2>
         <p className="text-fd-muted-foreground">
-          Configure servers once in Switchboard. Each client gets a single entry that points at its profile, so adding a
-          server or moving a tool between profiles never means editing every client again.
+          Configure servers once in Switchboard. Each client gets a single entry, and you switch its profile in Switchboard, so adding a
+          server or moving a client to another profile never means editing its config again.
         </p>
         <pre className="w-full overflow-x-auto rounded-lg border bg-fd-card p-4 text-left text-sm">
           <span className="text-red-600 dark:text-red-400">{'- "github":  { "command": "npx", "args": [...] },'}</span>
@@ -145,7 +116,7 @@ export default function HomePage() {
           {'\n'}
           <span className="text-red-600 dark:text-red-400">{'- "sentry":  { "command": "npx", "args": [...] },'}</span>
           {'\n'}
-          <span className="text-green-700 dark:text-green-400">{'+ "switchboard": { "url": "http://localhost:7690/p/work/mcp" }'}</span>
+          <span className="text-green-700 dark:text-green-400">{'+ "switchboard": { "url": "http://localhost:7690/c/cursor/mcp" }'}</span>
         </pre>
       </section>
 
