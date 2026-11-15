@@ -97,6 +97,67 @@ export type LiveState = 'connecting' | 'live' | 'offline'
 export function useLiveEvents(qc: QueryClient): LiveState {
   const [state, setState] = useState<LiveState>('connecting')
   useEffect(() => {
+    function open(): EventSource {
+      const source = new EventSource(adminToken ? `/api/events?token=${enc(adminToken)}` : '/api/events', {
+        withCredentials: true,
+      })
+      const parse = (e: Event) => JSON.parse((e as MessageEvent<string>).data) as unknown
+      let wasLive = false
+      source.onopen = () => {
+        setState('live')
+        // Catch up on anything missed while disconnected.
+        if (wasLive) void qc.invalidateQueries()
+        wasLive = true
+      }
+      source.onerror = () => setState(source.readyState === EventSource.CLOSED ? 'offline' : 'connecting')
+      source.addEventListener('audit', (e) => {
+        const event = parse(e) as AuditEvent
+        qc.setQueryData<AuditEvent[]>(keys.audit, (old) => (old ? [event, ...old].slice(0, 1000) : old))
+        // A new call is the first sign a client is connected; refresh onboarding state lazily.
+        void qc.invalidateQueries({ queryKey: ['stats'], refetchType: 'none' })
+      })
+      source.addEventListener('server', (e) => {
+        const status = parse(e) as ConnectionStatus
+        // `status.name` is an instance: the server itself, or one of its accounts (`github.work`).
+        qc.setQueryData<ServerRow[]>(keys.servers, (old) =>
+          old?.map((row) => {
+            const ofRow = row.name === (status.server ?? status.name)
+            if (!ofRow) return row
+            return {
+              ...row,
+              status: row.status?.name === status.name || row.name === status.name ? status : row.status,
+              instances: row.instances?.map((i) => (i.id === status.name ? { ...i, status } : i)),
+            }
+          }),
+        )
+        if (status.state === 'ready') {
+          void qc.invalidateQueries({ queryKey: keys.tools(status.name) })
+          if (status.server) void qc.invalidateQueries({ queryKey: keys.tools(status.server) })
+        }
+      })
+      source.addEventListener('clients', () => {
+        void qc.invalidateQueries({ queryKey: keys.clients })
+      })
+      source.addEventListener('sessions', (e) => {
+        const sessions = parse(e) as SessionInfo[]
+        qc.setQueryData(keys.sessions, sessions)
+        qc.setQueryData<Status>(keys.status, (old) => (old ? { ...old, sessions: sessions.length } : old))
+        // Session counts are part of each client row.
+        void qc.invalidateQueries({ queryKey: keys.clients })
+      })
+      source.addEventListener('config', (e) => {
+        const config = parse(e) as ConfigWithSettings
+        qc.setQueryData(keys.config, config)
+        if (config.settings) qc.setQueryData(keys.settings, config.settings)
+        void qc.invalidateQueries({ queryKey: keys.servers })
+        void qc.invalidateQueries({ queryKey: keys.status })
+        void qc.invalidateQueries({ queryKey: keys.import })
+        // Rules, choices or the default changed: what each client gets may have too.
+        void qc.invalidateQueries({ queryKey: keys.clients })
+      })
+      return source
+    }
+
     let source = open()
     // A page kept in the back/forward cache must not hold its stream open: the browser allows
     // only six connections per host, and frozen pages holding them make every new page hang.
@@ -115,65 +176,4 @@ export function useLiveEvents(qc: QueryClient): LiveState {
     }
   }, [qc])
   return state
-
-  function open(): EventSource {
-    const source = new EventSource(adminToken ? `/api/events?token=${enc(adminToken)}` : '/api/events', {
-      withCredentials: true,
-    })
-    const parse = (e: Event) => JSON.parse((e as MessageEvent<string>).data) as unknown
-    let wasLive = false
-    source.onopen = () => {
-      setState('live')
-      // Catch up on anything missed while disconnected.
-      if (wasLive) void qc.invalidateQueries()
-      wasLive = true
-    }
-    source.onerror = () => setState(source.readyState === EventSource.CLOSED ? 'offline' : 'connecting')
-    source.addEventListener('audit', (e) => {
-      const event = parse(e) as AuditEvent
-      qc.setQueryData<AuditEvent[]>(keys.audit, (old) => (old ? [event, ...old].slice(0, 1000) : old))
-      // A new call is the first sign a client is connected; refresh onboarding state lazily.
-      void qc.invalidateQueries({ queryKey: ['stats'], refetchType: 'none' })
-    })
-    source.addEventListener('server', (e) => {
-      const status = parse(e) as ConnectionStatus
-      // `status.name` is an instance: the server itself, or one of its accounts (`github.work`).
-      qc.setQueryData<ServerRow[]>(keys.servers, (old) =>
-        old?.map((row) => {
-          const ofRow = row.name === (status.server ?? status.name)
-          if (!ofRow) return row
-          return {
-            ...row,
-            status: row.status?.name === status.name || row.name === status.name ? status : row.status,
-            instances: row.instances?.map((i) => (i.id === status.name ? { ...i, status } : i)),
-          }
-        }),
-      )
-      if (status.state === 'ready') {
-        void qc.invalidateQueries({ queryKey: keys.tools(status.name) })
-        if (status.server) void qc.invalidateQueries({ queryKey: keys.tools(status.server) })
-      }
-    })
-    source.addEventListener('clients', () => {
-      void qc.invalidateQueries({ queryKey: keys.clients })
-    })
-    source.addEventListener('sessions', (e) => {
-      const sessions = parse(e) as SessionInfo[]
-      qc.setQueryData(keys.sessions, sessions)
-      qc.setQueryData<Status>(keys.status, (old) => (old ? { ...old, sessions: sessions.length } : old))
-      // Session counts are part of each client row.
-      void qc.invalidateQueries({ queryKey: keys.clients })
-    })
-    source.addEventListener('config', (e) => {
-      const config = parse(e) as ConfigWithSettings
-      qc.setQueryData(keys.config, config)
-      if (config.settings) qc.setQueryData(keys.settings, config.settings)
-      void qc.invalidateQueries({ queryKey: keys.servers })
-      void qc.invalidateQueries({ queryKey: keys.status })
-      void qc.invalidateQueries({ queryKey: keys.import })
-      // Rules, choices or the default changed: what each client gets may have too.
-      void qc.invalidateQueries({ queryKey: keys.clients })
-    })
-    return source
-  }
 }
