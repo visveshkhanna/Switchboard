@@ -3,7 +3,7 @@ title: Web UI
 description: What each page of the web UI at http://127.0.0.1:7690 does.
 ---
 
-`switchboard up` opens the web UI at `http://127.0.0.1:7690`. It edits the same `config.json` as the CLI, through the daemon's admin API, and updates live as servers start, clients connect and tools are called. The theme follows your system, or pick Light or Dark at the bottom of the sidebar.
+`switchboard up` opens the web UI at `http://127.0.0.1:7690`. It edits the same `config.json` as the CLI, through the daemon's admin API, and updates live as servers start, clients connect and tools are called. The theme follows your system, or pick Light or Dark at the bottom of the sidebar. When Switchboard is [hosted](/docs/guides/self-hosting), the web UI first asks for the admin password, and the sidebar has Log out.
 
 ## Overview
 
@@ -34,6 +34,7 @@ A live preview, which stays in view as you scroll, shows before you save exactly
 
 - **Connected clients**: every MCP client that has connected, including ones Switchboard has no preset for, with whether it is live, how its profile was chosen and when it was last seen. Clients [waiting for a profile](/docs/concepts/profile-resolution#default-profile) come first; pick a profile and the client gets its tools at once, without reconnecting. **Any MCP client works** gives the shared URL to paste into a client that is not listed.
 - **Known clients**: each supported client, whether it is installed, and the profile it is connected to. **What will be written** previews the exact entry. Pick a profile, or **Automatic** to use client rules, then **Connect**; see [Connecting clients](/docs/guides/connect-clients).
+- **API keys**: each client's menu can create a key, shown once with a ready-to-paste entry, and lists its keys with when they were last used and a Revoke action. Keys are required when Switchboard is [hosted](/docs/guides/self-hosting).
 - **Client rules** and the **default profile**, which decide the profile on the shared `/mcp` URL. Both are saved in `config.json`.
 
 ## Secrets
