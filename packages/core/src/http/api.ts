@@ -104,6 +104,13 @@ export function adminApi(daemon: Daemon): Hono {
   })
 
   // Servers
+  /** An instance by id, or a server's first instance (its default, else its first account). */
+  const connectionFor = (name: string) => {
+    const exact = daemon.upstream.get(name)
+    if (exact) return exact
+    const first = serverInstances(config()).find((i) => i.server === name)
+    return first && daemon.upstream.get(first.id)
+  }
   api.get('/servers', (c) => {
     const statuses = new Map(daemon.upstream.statuses().map((s) => [s.name, s]))
     const instances = serverInstances(config())
@@ -162,10 +169,10 @@ export function adminApi(daemon: Daemon): Hono {
       : serverInstances(config()).find((i) => i.server === name && daemon.catalog.has(i.id))?.id
     return c.json((id && daemon.catalog.get(id)?.tools) || [])
   })
-  api.get('/servers/:name/logs', (c) => c.json(daemon.upstream.get(c.req.param('name'))?.stderr ?? []))
+  api.get('/servers/:name/logs', (c) => c.json(connectionFor(c.req.param('name'))?.stderr ?? []))
   /** Start a sign-in for a server that uses OAuth; returns the URL to open. */
   api.post('/servers/:name/auth', async (c) => {
-    const connection = daemon.upstream.get(c.req.param('name'))
+    const connection = connectionFor(c.req.param('name'))
     if (!connection) return c.json({ error: 'Unknown server' }, 404)
     await connection.stop()
     await connection.sync().catch(() => undefined)
@@ -175,25 +182,29 @@ export function adminApi(daemon: Daemon): Hono {
     return c.json({ ok: false, error: status.lastError ?? 'The server did not ask for sign-in.' })
   })
   api.post('/servers/:name/signout', async (c) => {
-    const connection = daemon.upstream.get(c.req.param('name'))
+    const connection = connectionFor(c.req.param('name'))
     if (!connection) return c.json({ error: 'Unknown server' }, 404)
     await connection.signOut()
     return c.json({ ok: true })
   })
+  /** Restart one instance, or every account of a server. */
   api.post('/servers/:name/restart', async (c) => {
-    const connection = daemon.upstream.get(c.req.param('name'))
-    if (!connection) return c.json({ error: 'Unknown server' }, 404)
-    await connection.stop()
+    const name = c.req.param('name')
+    const own = daemon.upstream.get(name)
+    const connections = own ? [own] : daemon.upstream.list().filter((x) => x.status().server === name)
+    if (!connections.length) return c.json({ error: 'Unknown server' }, 404)
+    await Promise.all(connections.map((x) => x.stop()))
     try {
-      const tools = await connection.sync()
-      return c.json({ ok: true, tools: tools.length })
+      const counts = await Promise.all(connections.map((x) => x.sync()))
+      return c.json({ ok: true, tools: counts[0]!.length })
     } catch (error) {
-      return c.json({ ok: false, error: (error as Error).message, stderr: connection.stderr.slice(-20) })
+      const failed = connections.find((x) => x.status().state === 'error') ?? connections[0]!
+      return c.json({ ok: false, error: (error as Error).message, stderr: failed.stderr.slice(-20) })
     }
   })
   /** Connect and list tools, to check a server works. */
   api.post('/servers/:name/test', async (c) => {
-    const connection = daemon.upstream.get(c.req.param('name'))
+    const connection = connectionFor(c.req.param('name'))
     if (!connection) return c.json({ error: 'Unknown server' }, 404)
     try {
       const tools = await connection.sync()

@@ -171,6 +171,12 @@ export function ServersPage() {
                         <div className="flex flex-wrap gap-1">
                           <Badge variant="outline">{row.config.transport}</Badge>
                           {keepsRunning(row) && <Badge variant="secondary">Keep running</Badge>}
+                          {(row.instances?.filter((i) => i.account).length ?? 0) > 0 && (
+                            <Badge variant="secondary">
+                              {row.instances!.filter((i) => i.account).length} account
+                              {row.instances!.filter((i) => i.account).length === 1 ? '' : 's'}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </TableCell>
@@ -768,7 +774,9 @@ export function ServerDetail({ name }: { name: string }) {
 
   const wait = secondsUntil(st?.nextRestartAt)
   const enabled = row.config.enabled
-  const needsAuth = enabled && st?.state === 'needs-auth'
+  const accounts = row.instances?.filter((i) => i.account) ?? []
+  // With accounts, each one signs in on its own in the Accounts card; the top card is for the server's own.
+  const needsAuth = enabled && st?.state === 'needs-auth' && (!accounts.length || !st.account)
   const showDiscovering =
     enabled && (discovering !== null || (isDiscovering(enabled, st) && st?.state === 'starting'))
 
@@ -842,6 +850,8 @@ export function ServerDetail({ name }: { name: string }) {
         </div>
       )}
 
+      {accounts.length > 0 && <AccountsCard row={row} />}
+
       {showDiscovering && (
         <Alert>
           <Spinner />
@@ -884,6 +894,76 @@ export function ServerDetail({ name }: { name: string }) {
         </TabsContent>
       </Tabs>
     </Page>
+  )
+}
+
+/** The server's own instance and every profile's separate account of it. */
+function AccountsCard({ row }: { row: ServerRow }) {
+  const qc = useQueryClient()
+  const restart = useMutation({
+    mutationFn: (id: string) =>
+      post<{ ok: true; tools: number } | { ok: false; error: string }>(`/servers/${enc(id)}/restart`),
+    onSuccess: (r, id) => {
+      if (r.ok) toast.success(`Restarted ${id}: ${r.tools} tools`)
+      else toast.error(`Restart of ${id} failed: ${r.error}`)
+      void qc.invalidateQueries({ queryKey: keys.servers })
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  })
+  const instances = row.instances ?? []
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Accounts</CardTitle>
+        <CardDescription>
+          Profiles with their own credentials for {row.name} run it as a separate account, with its own
+          process and sign-in. Set them in each profile's Credentials.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col divide-y">
+        {instances.map((i) => (
+          <div key={i.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="flex flex-wrap items-center gap-2 font-medium">
+                {i.account ?? 'Default'}
+                <code className="font-mono text-xs text-muted-foreground">{i.id}</code>
+              </span>
+              <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                {i.profiles.length
+                  ? i.profiles.map((p) => (
+                      <Link key={p} to={`/profiles/${p}`}>
+                        <Badge variant="outline" className="hover:bg-accent">
+                          {p}
+                        </Badge>
+                      </Link>
+                    ))
+                  : 'No profile uses it'}
+              </span>
+            </div>
+            <ServerState status={i.status} enabled={row.config.enabled} />
+            <span className="w-16 text-right text-sm tabular-nums text-muted-foreground">
+              {i.status?.toolCount !== undefined ? `${i.status.toolCount} tools` : ''}
+            </span>
+            {i.status?.state === 'needs-auth' ? (
+              <SignInButton name={i.id} />
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={!row.config.enabled || (restart.isPending && restart.variables === i.id)}
+                onClick={() => restart.mutate(i.id)}
+                aria-label={`Restart ${i.id}`}
+              >
+                <RotateCwIcon />
+              </Button>
+            )}
+            {i.status?.state === 'error' && i.status.lastError && (
+              <p className="w-full text-xs break-words text-destructive">{i.status.lastError}</p>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 

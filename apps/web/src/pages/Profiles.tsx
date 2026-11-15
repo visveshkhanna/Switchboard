@@ -4,6 +4,7 @@ import { LayersIcon, PlusIcon, ServerIcon, XIcon } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmButton, ErrorAlert, InlineCode, LoadingState, Page, UrlField } from '@/components/common'
+import { CredentialsCard } from '@/components/profile-credentials'
 import { ServerState } from '@/components/server-status'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -426,6 +427,8 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
               )}
             </CardContent>
           </Card>
+
+          <CredentialsCard profileName={profileName || 'new-profile'} draft={draft} set={set} />
 
           <ToolsCard
             draft={draft}

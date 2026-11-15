@@ -146,4 +146,25 @@ describe('per-profile credentials', () => {
     ).json()) as { ok: boolean }
     expect(tools.ok).toBe(true)
   })
+
+  it('acts on every account when the server itself has no default instance', async () => {
+    t = await startDaemon({
+      servers: { alpha: stdioServer('alpha') },
+      profiles: {
+        work: { servers: ['alpha'], credentials: { alpha: { env: { TOKEN: 'w' } } } },
+        personal: { servers: ['alpha'], credentials: { alpha: { env: { TOKEN: 'p' } } } },
+      },
+    })
+    const post = (path: string) =>
+      fetch(`${t.url}/api${path}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${t.daemon.adminToken}` },
+      }).then((r) => r.json() as Promise<{ ok: boolean; tools?: unknown }>)
+    expect((await post('/servers/alpha/test')).ok).toBe(true)
+    expect(await post('/servers/alpha/restart')).toMatchObject({ ok: true, tools: 7 })
+    expect(t.daemon.upstream.statuses().map((s) => [s.name, s.state])).toEqual([
+      ['alpha.work', 'ready'],
+      ['alpha.personal', 'ready'],
+    ])
+  })
 })

@@ -26,7 +26,11 @@ export interface Status {
 export type ConnectionState = 'stopped' | 'starting' | 'ready' | 'error' | 'needs-auth'
 
 export interface ConnectionStatus {
+  /** The instance id: the server's name, or `server.account`. */
   name: string
+  /** Older daemons omit these. */
+  server?: string
+  account?: string | null
   transport: ServerConfig['transport']
   enabled: boolean
   state: ConnectionState
@@ -47,10 +51,21 @@ export interface ConnectionStatus {
   authUrl?: string
 }
 
+/** One running copy of a server: its default, or a profile's own account. */
+export interface ServerInstanceRow {
+  id: string
+  account: string | null
+  profiles: string[]
+  status?: ConnectionStatus
+}
+
 export interface ServerRow {
   name: string
   config: ServerConfig
+  /** The default instance, or the first account when every profile has its own. */
   status?: ConnectionStatus
+  /** Older daemons omit it. */
+  instances?: ServerInstanceRow[]
 }
 
 export interface ToolDef {
