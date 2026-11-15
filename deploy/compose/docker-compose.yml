@@ -1,0 +1,31 @@
+# Switchboard on a server with automatic HTTPS from Caddy.
+#
+#   cp .env.example .env    # set DOMAIN and SWITCHBOARD_ADMIN_PASSWORD
+#   docker compose up -d
+#
+# Point DOMAIN's DNS at this server first; Caddy gets a certificate for it.
+services:
+  switchboard:
+    image: ghcr.io/visveshkhanna/switchboard:latest
+    restart: unless-stopped
+    environment:
+      SWITCHBOARD_PUBLIC_URL: https://${DOMAIN:?set DOMAIN in .env}
+      SWITCHBOARD_ADMIN_PASSWORD: ${SWITCHBOARD_ADMIN_PASSWORD:?set SWITCHBOARD_ADMIN_PASSWORD in .env}
+    volumes:
+      - switchboard-data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${DOMAIN} --to switchboard:7690
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - switchboard
+
+volumes:
+  switchboard-data:
+  caddy-data:

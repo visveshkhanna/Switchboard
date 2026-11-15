@@ -88,3 +88,32 @@ jobs:
           name: npm-package
           path: apps/cli/*.tgz
           retention-days: 7
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: switchboard:ci
+          build-args: VERSION=0.0.0-ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test hosted mode
+        run: |
+          docker run -d --name sb -p 7690:7690 \
+            -e SWITCHBOARD_ADMIN_PASSWORD=ci-password-not-secret \
+            -e SWITCHBOARD_PUBLIC_URL=http://localhost:7690 switchboard:ci
+          for _ in $(seq 30); do curl -fs localhost:7690/healthz && break; sleep 1; done
+          docker exec sb switchboard --version | grep -qxF 0.0.0-ci
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:7690/mcp -H 'content-type: application/json' -d '{}')
+          test "$code" = 401
+          docker exec sb sh -c 'command -v npx && command -v uvx && command -v python3'
+          docker rm -f sb

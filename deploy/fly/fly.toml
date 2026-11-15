@@ -1,0 +1,39 @@
+# Switchboard on Fly.io.
+#
+#   fly launch --copy-config --no-deploy --name <your-app>
+#   fly volumes create switchboard_data --size 1
+#   fly secrets set SWITCHBOARD_ADMIN_PASSWORD='<a long password>'
+#   fly deploy
+#
+# Then set SWITCHBOARD_PUBLIC_URL below to https://<your-app>.fly.dev.
+# Keep one machine: sessions live in memory.
+app = "switchboard"
+primary_region = "iad"
+
+[build]
+  image = "ghcr.io/visveshkhanna/switchboard:latest"
+
+[env]
+  SWITCHBOARD_PUBLIC_URL = "https://switchboard.fly.dev"
+
+[[mounts]]
+  source = "switchboard_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 7690
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  memory = "512mb"
+  cpus = 1

@@ -31,6 +31,14 @@ npx mcp-switchboard@$version up
 
 or install it globally with \`npm install -g mcp-switchboard@$version\` and run \`switchboard up\`. Requires Node 24 or later.
 
+Or run it hosted, with Docker:
+
+\`\`\`bash
+docker run -d -p 7690:7690 -v switchboard:/data \\
+  -e SWITCHBOARD_ADMIN_PASSWORD=... -e SWITCHBOARD_PUBLIC_URL=https://your.domain \\
+  ghcr.io/visveshkhanna/switchboard:$version
+\`\`\`
+
 The npm package is published with [provenance](https://docs.npmjs.com/generating-provenance-statements). The attached tarball's build provenance can be checked with \`gh attestation verify mcp-switchboard-$version.tgz --repo $repo\`.
 
 Docs: https://switchboard.visvesh.dev/docs

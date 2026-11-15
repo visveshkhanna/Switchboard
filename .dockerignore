@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/.turbo
+**/.next
+**/out
+**/.source
+**/.wrangler
+**/*.tgz
+apps/docs
+ref
+dump
+.dev
+.git
+.github
+.claude
+coverage
