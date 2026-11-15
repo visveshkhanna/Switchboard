@@ -6,3 +6,5 @@
 *.woff2 binary
 
 pnpm-lock.yaml linguist-generated=true -diff
+*.jpg binary
+*.mp4 binary

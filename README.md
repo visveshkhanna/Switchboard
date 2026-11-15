@@ -17,10 +17,9 @@ Group your MCP servers into profiles (personal, work, a client's) and give Curso
 
 </div>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/clients-dark.png">
-  <img alt="The Clients page: every AI client with a switch per profile" src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/clients-light.png">
-</picture>
+<a href="https://github.com/visveshkhanna/Switchboard/blob/main/.github/assets/switchboard-demo.mp4">
+  <img alt="Watch the 45-second demo: flip a switch and a client's tools change live" src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/demo-poster.jpg">
+</a>
 
 ## Why
 
@@ -81,6 +80,11 @@ Prefer to let your agent do it? The **Set up with AI** button gives you a prompt
 </table>
 
 ## How clients get their tools
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/clients-dark.png">
+  <img alt="The Clients page: every AI client with a switch per profile" src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/clients-light.png">
+</picture>
 
 Each client is set up once with its own URL, which Switchboard writes into the client's config file for you:
 
