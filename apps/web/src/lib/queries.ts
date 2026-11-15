@@ -1,7 +1,9 @@
 import { type QueryClient, useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { ApiError, adminToken, enc, get } from './api.ts'
+import { baseUrl } from './snippets.ts'
 import type {
+  ApiKey,
   AuditEvent,
   ClientRow,
   ConfigWithSettings,
@@ -28,8 +30,17 @@ export const keys = {
   import: ['import'] as const,
   settings: ['settings'] as const,
   stats: (range: StatsRange) => ['stats', range] as const,
+  apiKeys: ['api-keys'] as const,
   tools: (name: string) => ['tools', name] as const,
   logs: (name: string) => ['logs', name] as const,
+}
+
+export const useApiKeys = () => useQuery({ queryKey: keys.apiKeys, queryFn: () => get<ApiKey[]>('/keys') })
+
+/** Where clients reach the daemon (public URL when hosted). */
+export function useBaseUrl(): string {
+  const status = useStatus()
+  return baseUrl(status.data)
 }
 
 export const useStatus = () => useQuery({ queryKey: keys.status, queryFn: () => get<Status>('/status') })
@@ -86,7 +97,9 @@ export type LiveState = 'connecting' | 'live' | 'offline'
 export function useLiveEvents(qc: QueryClient): LiveState {
   const [state, setState] = useState<LiveState>('connecting')
   useEffect(() => {
-    const source = new EventSource(`/api/events?token=${enc(adminToken)}`)
+    const source = new EventSource(adminToken ? `/api/events?token=${enc(adminToken)}` : '/api/events', {
+      withCredentials: true,
+    })
     const parse = (e: Event) => JSON.parse((e as MessageEvent<string>).data) as unknown
     let wasLive = false
     source.onopen = () => {

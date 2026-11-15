@@ -6,6 +6,7 @@ import {
   ClockIcon,
   CopyIcon,
   ExternalLinkIcon,
+  KeyRoundIcon,
   MoreHorizontalIcon,
   PowerOffIcon,
   RotateCcwIcon,
@@ -13,7 +14,9 @@ import {
   TriangleAlertIcon,
   WrenchIcon,
 } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
+import { ClientKeys, CreateKeyDialog } from '@/components/api-keys'
 import { isWaiting, ProfileSwitches, useSetClientProfile } from '@/components/client-profiles'
 import { RulesCard } from '@/components/client-rules'
 import {
@@ -42,9 +45,9 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { del, enc, errorMessage, post, put } from '@/lib/api'
 import { relativeTime, useTick } from '@/lib/format'
-import { keys, useClients, useConfig } from '@/lib/queries'
+import { keys, useClients, useConfig, useStatus } from '@/lib/queries'
 import { Link } from '@/lib/router'
-import { clientInfo, clientSnippet } from '@/lib/snippets'
+import { baseUrl, clientInfo, clientSnippet } from '@/lib/snippets'
 import type { ClientRow } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -57,6 +60,7 @@ export function ClientsPage() {
   useTick()
   const clients = useClients()
   const config = useConfig()
+  const status = useStatus()
   const profiles = Object.keys(config.data?.profiles ?? {})
   const rows = clients.data ?? []
   const main = rows.filter((c) => !isDormant(c)).sort((a, b) => Number(isWaiting(b)) - Number(isWaiting(a)))
@@ -70,6 +74,18 @@ export function ClientsPage() {
         config.data && <DefaultProfileControl current={config.data.defaultProfile} profiles={profiles} />
       }
     >
+      {status.data?.remote && (
+        <Alert>
+          <KeyRoundIcon />
+          <AlertTitle>Hosted: every client needs an API key</AlertTitle>
+          <AlertDescription>
+            Clients reach Switchboard at <InlineCode>{baseUrl(status.data)}</InlineCode> and must send{' '}
+            <InlineCode>Authorization: Bearer sbk_…</InlineCode>. Create one per client from its menu (Create
+            API key…); the key also tells Switchboard which client it is.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {config.data && !profiles.length && (
         <Alert>
           <TriangleAlertIcon />
@@ -252,7 +268,15 @@ function useClientActions(c: ClientRow) {
 
 type Actions = ReturnType<typeof useClientActions>
 
-function ClientMenu({ client: c, actions }: { client: ClientRow; actions: Actions }) {
+function ClientMenu({
+  client: c,
+  actions,
+  onCreateKey,
+}: {
+  client: ClientRow
+  actions: Actions
+  onCreateKey: () => void
+}) {
   const set = useSetClientProfile()
   const setup = c.preset?.setup
   return (
@@ -285,6 +309,10 @@ function ClientMenu({ client: c, actions }: { client: ClientRow; actions: Action
           >
             <CopyIcon />
             Copy this client's URL
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onCreateKey}>
+            <KeyRoundIcon />
+            Create API key…
           </DropdownMenuItem>
         </DropdownMenuGroup>
         {c.preset && (
@@ -425,6 +453,7 @@ function SetupSection({ client: c, actions }: { client: ClientRow; actions: Acti
 
 function ClientCard({ client: c, profiles }: { client: ClientRow; profiles: string[] }) {
   const actions = useClientActions(c)
+  const [keyOpen, setKeyOpen] = useState(false)
   const waiting = isWaiting(c)
   const off = c.selection === 'off'
   const meta = [
@@ -449,7 +478,7 @@ function ClientCard({ client: c, profiles }: { client: ClientRow; profiles: stri
         </CardTitle>
         <CardDescription className="font-mono text-xs">{meta.join(' · ')}</CardDescription>
         <CardAction>
-          <ClientMenu client={c} actions={actions} />
+          <ClientMenu client={c} actions={actions} onCreateKey={() => setKeyOpen(true)} />
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -464,6 +493,8 @@ function ClientCard({ client: c, profiles }: { client: ClientRow; profiles: stri
           {!waiting && <p className="text-xs text-muted-foreground">{helperText(c)}</p>}
         </div>
         <SetupSection client={c} actions={actions} />
+        <ClientKeys client={c.id} />
+        <CreateKeyDialog client={c.id} clientName={c.name} open={keyOpen} onOpenChange={setKeyOpen} />
       </CardContent>
     </Card>
   )

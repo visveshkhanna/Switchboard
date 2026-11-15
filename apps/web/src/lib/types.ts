@@ -12,6 +12,12 @@ export interface Status {
   home: string
   configPath: string
   secretsBackend: string
+  /** True when hosted: web UI behind a login, MCP clients need API keys. */
+  remote?: boolean
+  /** Where clients reach the daemon: the public URL when hosted. */
+  baseUrl?: string
+  /** Number of API keys. */
+  keys?: number
   servers: number
   profiles: number
   sessions: number
@@ -157,4 +163,19 @@ export interface Stats {
   servers: { server: string; calls: number; errors: number }[]
   clients: { client: string; calls: number }[]
   profiles: { profile: string; calls: number }[]
+}
+
+/** An API key; the secret token is only returned once, at creation. */
+export interface ApiKey {
+  id: string
+  client: string
+  label?: string
+  createdAt: string
+  lastUsedAt?: string
+}
+
+export interface CreatedApiKey {
+  token: string
+  key: ApiKey
+  url: string
 }

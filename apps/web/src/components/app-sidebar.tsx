@@ -6,6 +6,7 @@ import {
   HouseIcon,
   KeyRoundIcon,
   LayersIcon,
+  LogOutIcon,
   MonitorIcon,
   MoonIcon,
   ServerIcon,
@@ -37,8 +38,10 @@ import {
   SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { auth, cookieSession } from '@/lib/api'
 import { type LiveState, useStatus } from '@/lib/queries'
 import { Link, useLocation } from '@/lib/router'
+import { baseUrl } from '@/lib/snippets'
 import { type ThemePref, useTheme } from '@/lib/theme'
 
 const NAV = [
@@ -170,11 +173,27 @@ export function AppSidebar({ live }: { live: LiveState }) {
           <SidebarMenuItem>
             <ThemeMenu />
           </SidebarMenuItem>
+          {cookieSession && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Log out"
+                onClick={() =>
+                  void auth
+                    .logout()
+                    .catch(() => undefined)
+                    .then(() => window.location.reload())
+                }
+              >
+                <LogOutIcon />
+                <span>Log out</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
         <div
           role="status"
           className="flex flex-col gap-1 rounded-md border bg-background px-2.5 py-2 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-2"
-          title={status.data?.port ? `Daemon on 127.0.0.1:${status.data.port}` : undefined}
+          title={status.data ? `Daemon at ${baseUrl(status.data)}` : undefined}
         >
           <span className="flex items-center gap-2 text-xs font-medium">
             <StatusDot
@@ -182,7 +201,11 @@ export function AppSidebar({ live }: { live: LiveState }) {
               pulse={live === 'connecting'}
             />
             <span className="truncate group-data-[collapsible=icon]:sr-only">{text}</span>
-            {status.data?.port && live === 'live' ? (
+            {status.data?.remote ? (
+              <span className="ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden">
+                Hosted
+              </span>
+            ) : status.data?.port && live === 'live' ? (
               <span className="ml-auto font-mono text-muted-foreground group-data-[collapsible=icon]:hidden">
                 :{status.data.port}
               </span>

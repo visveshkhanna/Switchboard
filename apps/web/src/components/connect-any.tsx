@@ -1,20 +1,25 @@
+import { KeyRoundIcon } from 'lucide-react'
 import { useState } from 'react'
+import { CreateKeyDialog } from '@/components/api-keys'
 import { InlineCode, Snippet, UrlField } from '@/components/common'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { useStatus } from '@/lib/queries'
-import { clientUrl, sharedUrl } from '@/lib/snippets'
+import { baseUrl, clientUrl, sharedUrl } from '@/lib/snippets'
 
 const ID_RE = /^[a-z0-9][a-z0-9_-]*$/
 
 /** How to connect a client Switchboard has no preset for. */
 export function ConnectAnyClientCard() {
   const status = useStatus()
-  const port = status.data?.port
+  const base = baseUrl(status.data)
+  const remote = status.data?.remote === true
   const [id, setId] = useState('my-agent')
+  const [keyOpen, setKeyOpen] = useState(false)
   const valid = ID_RE.test(id)
-  const url = clientUrl(port, valid ? id : 'my-agent')
+  const url = clientUrl(base, valid ? id : 'my-agent')
   return (
     <Card id="connect" className="scroll-mt-20">
       <CardHeader>
@@ -42,14 +47,34 @@ export function ConnectAnyClientCard() {
             )}
           </Field>
           <UrlField url={url} label="Client URL" />
+          {remote && (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                Hosted: this client must send an API key.
+              </p>
+              <Button size="sm" disabled={!valid} onClick={() => setKeyOpen(true)}>
+                <KeyRoundIcon data-icon="inline-start" />
+                Create API key for {valid ? id : 'this client'}
+              </Button>
+              <CreateKeyDialog client={id} open={keyOpen} onOpenChange={setKeyOpen} />
+            </div>
+          )}
           <Snippet
             title="mcp.json"
-            code={JSON.stringify({ mcpServers: { switchboard: { url } } }, null, 2)}
+            code={JSON.stringify(
+              {
+                mcpServers: {
+                  switchboard: remote ? { url, headers: { Authorization: 'Bearer <API key>' } } : { url },
+                },
+              },
+              null,
+              2,
+            )}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-3">
           <h3 className="text-sm font-medium">Or the shared URL</h3>
-          <UrlField url={sharedUrl(port)} label="Shared URL" />
+          <UrlField url={sharedUrl(base)} label="Shared URL" />
           <p className="text-sm text-muted-foreground">
             One URL for every client. Each one is identified by the name it reports over MCP and listed under
             that name. Prefer the own-URL form: the shared URL cannot tell apart two clients that report the

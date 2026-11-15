@@ -1,6 +1,6 @@
 import { brand } from '@switchboard/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckIcon, PlugZapIcon, XIcon } from 'lucide-react'
+import { CheckIcon, GlobeIcon, PlugZapIcon, XIcon } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { WaitingBanners } from '@/components/client-profiles'
 import { ErrorAlert, InlineCode, LoadingState, Page } from '@/components/common'
@@ -80,9 +80,17 @@ export function OverviewPage() {
       title="Overview"
       description={
         s ? (
-          <>
-            Daemon v{s.version} on port {s.port ?? '—'} · pid {s.pid} · started {relativeTime(s.startedAt)}
-          </>
+          <span className="flex flex-wrap items-center gap-2">
+            {s.remote && (
+              <Badge variant="secondary">
+                <GlobeIcon data-icon="inline-start" />
+                Hosted at {s.baseUrl}
+              </Badge>
+            )}
+            <span>
+              Daemon v{s.version} on port {s.port ?? '—'} · pid {s.pid} · started {relativeTime(s.startedAt)}
+            </span>
+          </span>
         ) : undefined
       }
       actions={<SetupWithAI variant="default" />}

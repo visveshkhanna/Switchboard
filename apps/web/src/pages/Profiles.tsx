@@ -48,7 +48,7 @@ import { del, enc, errorMessage, get, post, put } from '@/lib/api'
 import { candidateServers, PATTERN_RE, setTool, toolState } from '@/lib/profileTools'
 import { keys, useClients, useConfig, useServers, useStatus } from '@/lib/queries'
 import { Link, navigate } from '@/lib/router'
-import { profileUrl } from '@/lib/snippets'
+import { baseUrl, profileUrl } from '@/lib/snippets'
 import type { Preview, ToolDef } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -255,7 +255,7 @@ function Editor({ name, saved, serverNames }: { name?: string; saved: Profile; s
   }, [preview.dataUpdatedAt])
 
   const exposed = new Map(preview.data?.tools.map((t) => [t.id, t.name]))
-  const url = profileUrl(status.data?.port, profileName || '<name>')
+  const url = profileUrl(baseUrl(status.data), profileName || '<name>')
 
   return (
     <Page

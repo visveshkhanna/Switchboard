@@ -1,21 +1,24 @@
 import { brand } from '@switchboard/shared'
 
 /** Everything the copy-paste snippets and the AI prompt need to know about the daemon. */
-export function baseUrl(port?: number): string {
-  return `http://${brand.defaultHost}:${port ?? brand.defaultPort}`
+/** Where clients reach the daemon: the public URL when hosted, else the loopback address. */
+export function baseUrl(status?: { baseUrl?: string; port?: number }): string {
+  return (
+    status?.baseUrl?.replace(/\/+$/, '') ?? `http://${brand.defaultHost}:${status?.port ?? brand.defaultPort}`
+  )
 }
 
-export function profileUrl(port: number | undefined, profile: string): string {
-  return `${baseUrl(port)}/p/${profile}/mcp`
+export function profileUrl(base: string, profile: string): string {
+  return `${base}/p/${profile}/mcp`
 }
 
-export function sharedUrl(port?: number): string {
-  return `${baseUrl(port)}/mcp`
+export function sharedUrl(base: string): string {
+  return `${base}/mcp`
 }
 
 /** A client's own URL: its profile is then switched in Switchboard, not in its config file. */
-export function clientUrl(port: number | undefined, id: string): string {
-  return `${baseUrl(port)}/c/${id}/mcp`
+export function clientUrl(base: string, id: string): string {
+  return `${base}/c/${id}/mcp`
 }
 
 export interface ClientInfo {
@@ -129,10 +132,10 @@ export function clientSnippet(clientId: string, url: string): string {
 }
 
 /** The "add this MCP to your client" text, for one client, using its own URL. */
-export function manualInstructions(clientId: string, port: number | undefined): string {
+export function manualInstructions(clientId: string, base: string): string {
   const info = clientInfo(clientId)
   const name = info?.name ?? clientId
-  const url = clientUrl(port, clientId)
+  const url = clientUrl(base, clientId)
   const lines = [
     `Add ${brand.displayName} to ${name}`,
     '',
@@ -145,7 +148,7 @@ export function manualInstructions(clientId: string, port: number | undefined): 
   if (info?.bridge)
     lines.push(
       '',
-      `${name} only runs local commands, so this starts a small stdio bridge to the daemon at ${baseUrl(port)}.`,
+      `${name} only runs local commands, so this starts a small stdio bridge to the daemon at ${base}.`,
     )
   lines.push(
     '',
@@ -157,13 +160,15 @@ export function manualInstructions(clientId: string, port: number | undefined): 
 /** A self-contained prompt for an AI coding agent that sets Switchboard up for the user. */
 export function agentPrompt({
   clientId,
-  port,
+  base,
+  remote,
   profiles,
   servers,
   defaultProfile,
 }: {
   clientId: string
-  port?: number
+  base: string
+  remote?: boolean
   profiles: { name: string; servers: string[] }[]
   servers: string[]
   defaultProfile?: string
@@ -175,23 +180,23 @@ export function agentPrompt({
     ? profiles
         .map(
           (p) =>
-            `- ${p.name}${p.name === defaultProfile ? ' (default)' : ''}: ${profileUrl(port, p.name)} (servers: ${p.servers.join(', ') || 'none'})`,
+            `- ${p.name}${p.name === defaultProfile ? ' (default)' : ''}: ${profileUrl(base, p.name)} (servers: ${p.servers.join(', ') || 'none'})`,
         )
         .join('\n')
     : '- (none yet)'
   return `You are helping me set up ${brand.displayName}, a local MCP gateway, for ${client}.
 
 ## What ${brand.displayName} is
-${brand.displayName} is a daemon running on my machine at ${baseUrl(port)}. It runs my MCP servers once and serves them to every AI client through "profiles": named groups of servers and tools, each at its own Streamable HTTP endpoint:
-  ${baseUrl(port)}/p/<profile>/mcp
-There is also a shared endpoint, ${sharedUrl(port)}, where the profile is picked by the client's MCP name (client rules) or the default profile. A client that matches nothing still connects but waits, with no tools, until a profile is chosen for it.
+${brand.displayName} is a daemon running at ${base}. It runs my MCP servers once and serves them to every AI client through "profiles": named groups of servers and tools, each at its own Streamable HTTP endpoint:
+  ${base}/p/<profile>/mcp
+There is also a shared endpoint, ${sharedUrl(base)}, where the profile is picked by the client's MCP name (client rules) or the default profile. A client that matches nothing still connects but waits, with no tools, until a profile is chosen for it.
 Docs: ${brand.docsUrl}/docs
-
+${remote ? `\nThis ${brand.displayName} is hosted, not on this machine: every MCP client must send an API key as the header "Authorization: Bearer sbk_…". The user creates one per client in the dashboard (Clients → Create API key); never invent or print keys yourself. The CLI commands below run where the daemon runs.\n` : ''}
 ## Current state
 Servers: ${servers.length ? servers.join(', ') : '(none yet)'}
 Profiles:
 ${profileLines}
-Each client is set up once with its own URL, ${clientUrl(port, '<client-id>')}. Its profile is then a setting in ${brand.displayName}: switching it moves connected sessions live, with no config edit and no restart. Exactly one profile per client; a client with none switched on follows the default profile.
+Each client is set up once with its own URL, ${clientUrl(base, '<client-id>')}. Its profile is then a setting in ${brand.displayName}: switching it moves connected sessions live, with no config edit and no restart. Exactly one profile per client; a client with none switched on follows the default profile.
 
 ## Commands you may use (the CLI is "${cli}"; "${brand.name}" works too if it is installed globally)
 - ${cli} status                                  # daemon, servers, profiles, connected clients

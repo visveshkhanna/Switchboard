@@ -15,7 +15,7 @@ import {
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useConfig, useStatus } from '@/lib/queries'
-import { agentPrompt, CLIENT_INFO, clientInfo, manualInstructions } from '@/lib/snippets'
+import { agentPrompt, baseUrl, CLIENT_INFO, clientInfo, manualInstructions } from '@/lib/snippets'
 
 const clientOptions: Option[] = CLIENT_INFO.map((c) => ({ value: c.id, label: c.name }))
 
@@ -52,18 +52,19 @@ function SetupBody() {
   const status = useStatus()
   const config = useConfig()
   const [clientId, setClientId] = useState('claude-code')
-  const port = status.data?.port
+  const base = baseUrl(status.data)
   const info = clientInfo(clientId)
   const [tab, setTab] = useState<string>('agent')
 
   const prompt = agentPrompt({
     clientId,
-    port,
+    base,
+    remote: status.data?.remote,
     servers: Object.keys(config.data?.servers ?? {}),
     profiles: Object.entries(config.data?.profiles ?? {}).map(([name, p]) => ({ name, servers: p.servers })),
     defaultProfile: config.data?.defaultProfile,
   })
-  const manual = manualInstructions(clientId, port)
+  const manual = manualInstructions(clientId, base)
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-0 flex-1">
