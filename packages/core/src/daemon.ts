@@ -103,7 +103,7 @@ export class Daemon {
     const secrets = await openSecretBackend(paths.secrets, options.secretsBackend)
     let port: number | undefined
     const baseUrl = () =>
-      options.publicUrl?.replace(/\/+$/, '') ??
+      trimTrailingSlashes(options.publicUrl) ??
       `http://127.0.0.1:${port ?? options.port ?? brand.defaultPort}`
     const upstream = new UpstreamManager({
       catalog,
@@ -243,7 +243,7 @@ export class Daemon {
   /** The URL clients and the web UI use to reach this daemon. */
   get baseUrl(): string {
     return (
-      this.options.publicUrl?.replace(/\/+$/, '') ??
+      trimTrailingSlashes(this.options.publicUrl) ??
       `http://127.0.0.1:${this.#info?.port ?? this.options.port ?? brand.defaultPort}`
     )
   }
@@ -327,6 +327,14 @@ export class Daemon {
     await this.seen.flush()
     await rm(this.paths.pid, { force: true })
   }
+}
+
+/** Drop trailing "/" from a URL, in linear time (no backtracking regex on user input). */
+export function trimTrailingSlashes(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined
+  let end = url.length
+  while (end > 0 && url[end - 1] === '/') end--
+  return url.slice(0, end)
 }
 
 function escapeHtml(text: string): string {

@@ -115,18 +115,30 @@ interface PasswordFile {
 }
 
 /** The admin password, from SWITCHBOARD_ADMIN_PASSWORD or an scrypt hash in admin.json. */
+async function hashPassword(password: string): Promise<PasswordFile> {
+  const salt = randomBytes(16)
+  const hash = await scrypt(password, salt, 32)
+  return { algorithm: 'scrypt', salt: salt.toString('hex'), hash: hash.toString('hex') }
+}
+
+/**
+ * The admin password, from SWITCHBOARD_ADMIN_PASSWORD or admin.json. Either
+ * way only an scrypt hash is kept: a password from the environment is hashed
+ * with a fresh salt when the daemon starts and is not held in plain text.
+ */
 export class AdminPassword {
   private constructor(
     private readonly path: string,
     private stored: PasswordFile | undefined,
-    private readonly fromEnv: string | undefined,
+    /** Hash of the password from the environment; it takes precedence over admin.json. */
+    private readonly fromEnv: PasswordFile | undefined,
   ) {}
 
   static async open(path: string, fromEnv?: string): Promise<AdminPassword> {
     return new AdminPassword(
       path,
       await readJson<PasswordFile>(path).catch(() => undefined),
-      fromEnv || undefined,
+      fromEnv ? await hashPassword(fromEnv) : undefined,
     )
   }
 
@@ -135,17 +147,15 @@ export class AdminPassword {
   }
 
   async set(password: string): Promise<void> {
-    const salt = randomBytes(16)
-    const hash = await scrypt(password, salt, 32)
-    this.stored = { algorithm: 'scrypt', salt: salt.toString('hex'), hash: hash.toString('hex') }
+    this.stored = await hashPassword(password)
     await writeJson(this.path, this.stored, 0o600)
   }
 
   async verify(password: string): Promise<boolean> {
-    if (this.fromEnv) return safeEqual(sha256(password), sha256(this.fromEnv))
-    if (!this.stored) return false
-    const hash = await scrypt(password, Buffer.from(this.stored.salt, 'hex'), 32)
-    return safeEqual(hash, Buffer.from(this.stored.hash, 'hex'))
+    const expected = this.fromEnv ?? this.stored
+    if (!expected) return false
+    const hash = await scrypt(password, Buffer.from(expected.salt, 'hex'), 32)
+    return safeEqual(hash, Buffer.from(expected.hash, 'hex'))
   }
 }
 

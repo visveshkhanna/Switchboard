@@ -4,6 +4,11 @@ All notable changes to Switchboard are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Security
+
+- A hosted admin password given in `SWITCHBOARD_ADMIN_PASSWORD` is hashed with scrypt when the daemon starts and checked like a stored one, instead of being compared through a fast hash.
+- Trailing slashes are trimmed from the public URL in linear time.
+
 ## [0.3.0] - 2026-11-15
 
 Each client now has its own profile that you switch with one click, live; Switchboard can run on a server with API keys and a login; and there is a Docker image.
