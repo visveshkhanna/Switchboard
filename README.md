@@ -1,19 +1,35 @@
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/apps/docs/assets/brand/logo.svg" width="72" height="72" alt="">
+
 # Switchboard
 
-**One local MCP endpoint for all your AI agents.**
+**One MCP endpoint for all your AI agents.**
 
-Group your MCP servers into profiles, such as personal, work and a client's, and give Cursor, Claude Code, VS Code and every other agent only the tools it should see. Switchboard runs on your machine, starts servers only when a tool is called, and can shrink hundreds of tool definitions into a few search/execute tools or a single code-mode tool.
+Group your MCP servers into profiles (personal, work, a client's) and give Cursor, Claude Code, VS Code and every other agent exactly the tools it should see. Switch a client's profile with one click; it changes live, without restarting anything.
 
-> Switchboard is new: v0.1.0 is the first release. Feedback and issues are welcome.
+[![npm](https://img.shields.io/npm/v/mcp-switchboard?color=4f46e5)](https://www.npmjs.com/package/mcp-switchboard)
+[![CI](https://github.com/visveshkhanna/Switchboard/actions/workflows/ci.yml/badge.svg)](https://github.com/visveshkhanna/Switchboard/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/visveshkhanna/Switchboard/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/docs-switchboard.visvesh.dev-black)](https://switchboard.visvesh.dev/docs)
+
+[Docs](https://switchboard.visvesh.dev/docs) · [Quick start](#quick-start) · [Self-hosting](#run-it-on-a-server) · [Changelog](https://github.com/visveshkhanna/Switchboard/blob/main/CHANGELOG.md)
+
+</div>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/clients-dark.png">
+  <img alt="The Clients page: every AI client with a switch per profile" src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/clients-light.png">
+</picture>
 
 ## Why
 
-- **Profiles, not toggles.** Stop enabling and disabling servers in every project. Define `personal`, `acme` and `globex` once and point each client at the right one.
-- **One process per server.** Ten clients share one copy of each MCP server, started on first use and stopped when idle.
-- **Instant tool lists.** Tool catalogs are cached, so clients see their tools without waiting for servers to start.
+- **Profiles, not toggles.** Stop enabling and disabling servers in every project. Define `personal`, `work` and `client-acme` once.
+- **Switch live.** Set a client up once; after that its profile is a switch in Switchboard. Flip it and the client gets the new tools instantly, with no config edit or restart.
+- **Any client.** Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Codex and Gemini CLI are set up for you; any other MCP client shows up the moment it connects.
+- **One process per server.** Ten clients share one copy of each MCP server, started when added, stopped when idle and restarted if it crashes.
 - **Less context.** Large profiles can be served as `search_tools` / `get_schema` / `call_tool`, or as one `execute` tool where the model writes code that calls tools in a sandbox.
-- **Connect in one click.** Switchboard writes the MCP entry into your client's configuration file for you, and can import the servers you already have.
-- **Local and private.** Binds to loopback, keeps secrets in your OS keychain, no account and no cloud.
+- **Local first, hostable.** Runs on your machine with secrets in your OS keychain, or on a server with API keys and a login, from one Docker image.
 
 ## Quick start
 
@@ -21,35 +37,63 @@ Group your MCP servers into profiles, such as personal, work and a client's, and
 npx mcp-switchboard up
 ```
 
-This starts the daemon and opens the web UI at <http://localhost:7690>. From there:
+This starts Switchboard and opens it at <http://localhost:7690> (Node 24 or later). Then:
 
-1. **Import** the MCP servers already configured in Cursor, Claude Code, Claude Desktop or VS Code, or add new ones.
-2. **Create profiles** and choose the servers and tools in each.
-3. **Connect** your clients: pick a client, pick a profile, and Switchboard updates its configuration.
+1. **Import** the MCP servers you already use in Cursor, Claude Code, Claude Desktop or VS Code, or add new ones.
+2. **Create profiles** and pick the servers and tools in each. The first one becomes the default.
+3. **Set up your clients** on the Clients page (one click each, restart the client once), then switch their profiles whenever you like.
 
-## How a client picks a profile
+Prefer to let your agent do it? The **Set up with AI** button gives you a prompt to paste into Claude Code, Cursor or Codex.
 
-Switchboard decides which profile a connection uses, in this order:
+<table>
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/profile-dark.png">
+        <img alt="Editing a profile with a live preview of what clients see" src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/profile-light.png">
+      </picture>
+      <p align="center"><sub><b>Profiles</b> with a live preview of what a client sees and what it costs in context</sub></p>
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/activity-dark.png">
+        <img alt="Activity charts: calls, errors and latency" src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/activity-light.png">
+      </picture>
+      <p align="center"><sub><b>Activity</b>: calls, errors and latency, from an opt-in log that never stores arguments</sub></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/servers-dark.png">
+        <img alt="Servers with live status" src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/servers-light.png">
+      </picture>
+      <p align="center"><sub><b>Servers</b> with live status, logs, OAuth sign-in and automatic restarts</sub></p>
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/overview-dark.png">
+        <img alt="The overview with a getting-started checklist" src="https://raw.githubusercontent.com/visveshkhanna/Switchboard/main/.github/assets/overview-light.png">
+      </picture>
+      <p align="center"><sub><b>Overview</b> with a getting-started checklist and copy-paste snippets</sub></p>
+    </td>
+  </tr>
+</table>
 
-1. **URL path:** `http://localhost:7690/p/work/mcp`
-2. **Header:** `X-Switchboard-Profile: work` on `http://localhost:7690/mcp`
-3. **Client rules:** match the MCP client name, e.g. `cursor` → `work`, `claude-code` → `personal`
-4. **Default profile**
+## How clients get their tools
+
+Each client is set up once with its own URL, which Switchboard writes into the client's config file for you:
 
 ```jsonc
 // ~/.cursor/mcp.json
 {
   "mcpServers": {
-    "switchboard": { "url": "http://localhost:7690/p/work/mcp" }
+    "switchboard": { "url": "http://127.0.0.1:7690/c/cursor/mcp" }
   }
 }
 ```
 
-Clients that only speak stdio use the bridge:
-
-```bash
-switchboard connect --profile work
-```
+From then on, which profile Cursor gets is a setting in Switchboard. New clients use the default profile, and any MCP client can connect to `/c/<any-name>/mcp` or the shared `/mcp` and appear in the list. To pin a connection to one profile instead, use `/p/<profile>/mcp`. Clients that only speak stdio use `switchboard connect --client <name>`.
 
 ## Tool surfaces
 
@@ -72,22 +116,37 @@ switchboard server add github -- npx -y @modelcontextprotocol/server-github
 switchboard server add linear --url https://mcp.linear.app/mcp
 switchboard server auth linear                       # OAuth sign-in in the browser
 switchboard secret set github-token                  # use as secret://github-token
-switchboard profile add work --servers github,linear --surface auto
-switchboard client connect cursor --profile work
+switchboard profile add work --servers github,linear
+switchboard client connect cursor                    # set it up once
+switchboard client use cursor work                   # switch its profile, live
 switchboard status
-switchboard doctor
 ```
 
-`config.json` in `~/.switchboard` is plain JSON that you can also edit by hand; the daemon reloads it and tells connected clients when their tools change.
+`~/.switchboard/config.json` is plain JSON you can also edit by hand; Switchboard reloads it and tells connected clients when their tools change.
 
-## Documentation
+## Run it on a server
 
-Guides and reference: **<https://switchboard.visvesh.dev>**
+One setup for every machine you work on, and for cloud agents that need an HTTPS MCP URL:
 
-## Contributing
+```bash
+docker run -d -p 7690:7690 -v switchboard:/data \
+  -e SWITCHBOARD_ADMIN_PASSWORD='a long password' \
+  -e SWITCHBOARD_PUBLIC_URL=https://switchboard.example.com \
+  ghcr.io/visveshkhanna/switchboard:latest
+```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems as described in [SECURITY.md](SECURITY.md).
+Hosted, every MCP client needs an API key (each key acts as one client, so its profile switches like any other) and the web UI asks for the admin password. [`deploy/`](https://github.com/visveshkhanna/Switchboard/tree/main/deploy) has Docker Compose with automatic HTTPS and a Fly.io config; see the [Self-hosting guide](https://switchboard.visvesh.dev/docs/guides/self-hosting).
+
+## Develop
+
+```bash
+pnpm install
+pnpm dev        # daemon from source + web UI with hot reload, isolated from your real setup
+pnpm check      # lint, type-check and test
+```
+
+See [CONTRIBUTING.md](https://github.com/visveshkhanna/Switchboard/blob/main/CONTRIBUTING.md). Report security problems as described in [SECURITY.md](https://github.com/visveshkhanna/Switchboard/blob/main/SECURITY.md).
 
 ## License
 
-[Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for credits.
+[Apache License 2.0](https://github.com/visveshkhanna/Switchboard/blob/main/LICENSE). See [NOTICE](https://github.com/visveshkhanna/Switchboard/blob/main/NOTICE) for credits.
